@@ -76,11 +76,16 @@ for uploads, BigQuery for benchmarks, and Gemini TTS for spoken instructions and
 ## Results
 
 See [`eval/results/results.md`](eval/results/results.md) — produced by `eval/run_eval.py` against eight
-applicant packs (genuine, inflated, fabricated) handwritten by our team in Bahasa Indonesia and Tamil.
+applicant packs (4 genuine, 2 inflated, 2 fabricated) in Bahasa Indonesia and Tamil: 290/290 lines read exactly,
+8/8 decisions correct, 34.9 s median from evidence to decision. The notebook pages in these packs are rendered
+from ground-truth data; photographed handwritten packs are being added. Interview behaviour is covered by
+`tests/test_verifier.py` and was replayed by voice against the live service (consistent answers → approve,
+non-business purpose → decline with coaching, contradictions → refer).
 
 ## Responsible AI
 
-- A human loan officer makes every decision; flagged cases are referred, never auto-declined.
+- A human loan officer makes every decision; the system only recommends. Doubtful evidence is referred, never
+  auto-declined; a non-business loan purpose is recommended for decline with coaching (sample policy §1.3).
 - No protected attributes are used or asked about (gender, religion, ethnicity, marital status, age).
 - Every claim in the memo cites the evidence it rests on; every number links to its place on the photo.
 - Affordability is capped at 30% of each week's verified net cash (stricter than RBI's 50% household cap).
@@ -149,6 +154,6 @@ benchmark table, then deploys to Cloud Run (`asia-southeast1`).
 
 ## Data
 
-All applicant data is synthetic. Notebook pages were handwritten by the team from generated ground truth
-(`data/generate_packs.py`); payment statements are rendered from the same ground truth and are unbranded.
+All applicant data is synthetic. Notebook pages and payment statements are rendered from generated ground truth
+(`data/generate_packs.py`); statements are unbranded. Handwritten versions of the same pages are being photographed.
 The lender policy in `data/policy/` is an illustrative sample, not a real lender's policy.
