@@ -73,6 +73,16 @@ BigQuery through a Cloud Logging sink. Optional **Google sign-in** (Firebase Aut
 Runs as one Cloud Run service (FastAPI + ADK + the web app), with Firestore for applications, Cloud Storage
 for uploads, BigQuery for benchmarks, and Gemini TTS for spoken instructions and the borrower's explanation.
 
+## Apply with your own records
+
+Besides the one-click demo cases, a borrower can sign in with Google and apply with their own documents:
+pick many photos or PDFs at once, and Gemini 3.8 Flash sorts each page (notebook, payment statement, receipt, shop
+photo, or not used) — the borrower confirms anything it isn't sure about. Files go to a private Cloud Storage folder
+per application; photos are served through short-lived signed links. Statements may list single payments or daily
+totals; payments are added up per day and money going out is ignored. Only loan officers listed in
+`BUKTI_OFFICER_EMAILS` can decide a real application; the borrower sees its status under *My applications* and can
+delete it, with all its files, at any time.
+
 ## Results
 
 See [`eval/results/results.md`](eval/results/results.md) — produced by `eval/run_eval.py` against eight

@@ -59,9 +59,22 @@ def weekly_pattern(points: list[DailyPoint], use: str = "statement") -> list[flo
     for p in points:
         v = p.statement if use == "statement" else p.ledger
         buckets[week_of_month(date.fromisoformat(p.date))].append(v)
-    avgs = [statistics.fmean(buckets[w]) if buckets[w] else 0.0 for w in (1, 2, 3, 4)]
-    mean = statistics.fmean(avgs) or 1.0
-    return [round(a / mean, 2) for a in avgs]
+    present = {w: statistics.fmean(buckets[w]) for w in (1, 2, 3, 4) if buckets[w]}
+    mean = statistics.fmean(present.values()) if present else 0.0
+    if not mean:
+        return [1.0, 1.0, 1.0, 1.0]
+    # A notebook shorter than a month has no data for some weeks: treat those as average, not as zero.
+    return [round(present[w] / mean, 2) if w in present else 1.0 for w in (1, 2, 3, 4)]
+
+
+def overlap_window(entries: list[Entry], statement: list[StatementDay]) -> tuple[str, str] | None:
+    """The dates covered by both the notebook and the statement, or None if they don't overlap."""
+    ledger_days = sorted({e.date for e in entries if e.amount_in})
+    stmt_days = sorted({s.date for s in statement})
+    if not ledger_days or not stmt_days:
+        return None
+    start, end = max(ledger_days[0], stmt_days[0]), min(ledger_days[-1], stmt_days[-1])
+    return (start, end) if start <= end else None
 
 
 def reconcile(market: str, entries: list[Entry], statement: list[StatementDay],
@@ -69,6 +82,16 @@ def reconcile(market: str, entries: list[Entry], statement: list[StatementDay],
     """Compare what the notebook says with what the payment rail independently recorded."""
     m = MARKET[market]
     band = share_band or m["default_share_band"]
+    if not statement:
+        return _unverified(entries, "No payment statement was provided, so notebook sales could not be checked "
+                                    "against an independent record.")
+    window = overlap_window(entries, statement)
+    if window is None:
+        return _unverified(entries, "The payment statement covers different dates from the notebook, so the two "
+                                    "could not be compared.")
+    # Compare only the days both records cover; a day outside the statement is not an "idle" day.
+    entries = [e for e in entries if window[0] <= e.date <= window[1]]
+    statement = [s for s in statement if window[0] <= s.date <= window[1]]
     points = daily_series(entries, statement)
     ledger_total = sum(p.ledger for p in points)
     stmt_total = sum(p.statement for p in points)
@@ -120,6 +143,21 @@ def reconcile(market: str, entries: list[Entry], statement: list[StatementDay],
     return checks, stats
 
 
+def _unverified(entries: list[Entry], why: str) -> tuple[list[Check], dict]:
+    """Without a usable statement the cross-checks can't run: mark them 'watch' (never 'fail' — a missing
+    statement is not evidence of fabrication) and let the policy refer the case to an officer."""
+    points = daily_series(entries, [])
+    ledger_total = sum(p.ledger for p in points)
+    refs = [e.id for e in entries if e.amount_in][:6]
+    checks = [Check(id=cid, agent="reconciler", name=name, result="warn", summary=why if cid == "chk_share" else
+                    "Not checked: needs a payment statement covering the same days.", detail=why, evidence_refs=refs)
+              for cid, name in (("chk_share", "Notebook vs payment records"), ("chk_rhythm", "Daily rhythm agreement"),
+                                ("chk_ghost", "Sales on idle days"))]
+    stats = {"points": points, "ledger_total": ledger_total, "statement_total": 0, "share": 0.0, "corr": 0.0,
+             "ghost_days": [], "unverified": True}
+    return checks, stats
+
+
 def _ahash_distance(a: str, b: str) -> int:
     if not a or not b or len(a) != len(b):
         return 64
@@ -159,9 +197,15 @@ def integrity(market: str, entries: list[Entry], evidence: list[Evidence]) -> li
                             evidence_refs=[e.id for e in sales[:8]]))
 
     dupes: list[tuple[str, str]] = []
-    for i, a in enumerate(evidence):
-        for b in evidence[i + 1:]:
-            if a.type == b.type and (a.sha256 and a.sha256 == b.sha256 or _ahash_distance(a.ahash, b.ahash) <= 4):
+    usable = [e for e in evidence if e.status != "excluded"]
+    for i, a in enumerate(usable):
+        for b in usable[i + 1:]:
+            if a.type != b.type or (a.parent_id and a.parent_id == b.parent_id):
+                continue  # pages of one PDF are not re-used photos of each other
+            same_file = bool(a.sha256) and a.sha256 == b.sha256
+            # Printed statements all look alike to a perceptual hash; only photos are compared visually.
+            looks_same = a.type in ("ledger", "receipt", "shop") and _ahash_distance(a.ahash, b.ahash) <= 4
+            if same_file or looks_same:
                 dupes.append((a.id, b.id))
     checks.append(Check(
         id="chk_dupes", agent="integrity", name="Re-used photos",
@@ -201,7 +245,8 @@ def size_loan(market: str, stats: dict, checks: list[Check], purchases_total: in
     fails = [c for c in checks if c.result == "fail"]
     integrity_fails = [c for c in fails if c.agent == "integrity" or c.id == "chk_ghost"]
     points: list[DailyPoint] = stats["points"]
-    n_days = max(1, len(points))
+    # Calendar span, not the count of days with entries: a shop closed on Sundays still has 30-day months.
+    n_days = ((date.fromisoformat(points[-1].date) - date.fromisoformat(points[0].date)).days + 1) if points else 1
 
     ledger_monthly = stats["ledger_total"] / n_days * 30
     # Sales the payment rail can vouch for: statement ÷ the typical digital share of similar shops.
@@ -220,7 +265,8 @@ def size_loan(market: str, stats: dict, checks: list[Check], purchases_total: in
     purpose_fail = any(c.id == "chk_purpose" and c.result == "fail" for c in checks)
     interview_fail = any(c.id == "chk_interview" and c.result == "fail" for c in checks)
     other_fails = [c for c in fails if c.id not in ("chk_purpose", "chk_interview")]
-    if len(integrity_fails) >= 2 or interview_fail:
+    unverified = bool(stats.get("unverified"))
+    if len(integrity_fails) >= 2 or interview_fail or unverified:
         decision = "refer"
     elif purpose_fail:
         decision = "decline"
@@ -252,6 +298,10 @@ def size_loan(market: str, stats: dict, checks: list[Check], purchases_total: in
     if decision == "refer" and len(integrity_fails) >= 2:
         citations.append(Citation(source="Bukti sample lender policy §5.2",
                                   text="Two or more integrity failures require human review before any offer is made."))
+    if unverified:
+        citations.append(Citation(source="Bukti sample lender policy §2.1",
+                                  text="Notebook sales are verified against the digital payment statement for the "
+                                       "same period."))
     if interview_fail:
         citations.append(Citation(source="Bukti sample lender policy §5.3",
                                   text="Interview answers that contradict the evidence, or two or more unanswered key "

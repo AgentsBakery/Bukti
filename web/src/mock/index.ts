@@ -157,15 +157,50 @@ export function createMockApi(): BuktiApi {
     async createApplication(body) {
       const app = newApplication({
         pack_id: null,
-        persona: body.persona ?? { name: 'New applicant', business: 'Small shop', city: '' },
+        persona: body.persona,
         market: body.market,
         language: body.language,
       })
+      app.kind = 'real'
+      app.access = { edit: true, decide: true, officer: true, owner: true }
       store.put(app)
       return { application_id: app.id }
     },
 
-    async uploadEvidence(appId, file, type: EvidenceType) {
+    async updateEvidence(appId, evidenceId, type) {
+      let out: Evidence | undefined
+      store.update(appId, (a) => {
+        const ev = a.evidence.find((e) => e.id === evidenceId)
+        if (ev) {
+          ev.type = type
+          ev.label_source = 'borrower'
+          ev.status = type === 'other' ? 'excluded' : 'ready'
+          out = ev
+        }
+      })
+      if (!out) throw new ApiError(404, 'evidence not found')
+      return out
+    },
+
+    async deleteEvidence(appId, evidenceId) {
+      store.update(appId, (a) => {
+        a.evidence = a.evidence.filter((e) => e.id !== evidenceId)
+      })
+    },
+
+    async deleteApplication(appId) {
+      store.remove(appId)
+    },
+
+    async myApplications(): Promise<ApplicationSummary[]> {
+      return store
+        .list()
+        .filter((a) => a.kind === 'real')
+        .map((a) => ({ id: a.id, kind: 'real', persona: a.persona, market: a.market, status: a.status, created_at: a.created_at }))
+    },
+
+    async uploadEvidence(appId, file, requested?: EvidenceType): Promise<Evidence[]> {
+      const type: EvidenceType = requested ?? 'ledger'
       const app = getOr404(appId)
       const img = await downscale(file)
       const n = app.evidence.filter((e) => e.type === type).length + 1
@@ -177,7 +212,7 @@ export function createMockApi(): BuktiApi {
       })
       record('evidence.uploaded', appId, { detail: `${label} · ${img.width}×${img.height} · camera upload` })
       await sleep(250)
-      return ev
+      return [ev]
     },
 
     async getApplication(appId) {

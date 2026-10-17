@@ -56,13 +56,23 @@ def test_demo_pack_loads_are_rate_limited(client):
 
 
 def test_upload_rejects_non_images_and_wrong_types(client):
-    app_id = client.post("/api/applications", json={"market": "ID", "language": "id"}).json()["application_id"]
+    app_id = client.post("/api/demo/packs/sari/load").json()["application_id"]
     bad_type = client.post(f"/api/applications/{app_id}/evidence", data={"type": "passport"},
                            files={"file": ("x.jpg", b"\xff\xd8\xff", "image/jpeg")})
     assert bad_type.status_code == 400
     not_image = client.post(f"/api/applications/{app_id}/evidence", data={"type": "ledger"},
                             files={"file": ("x.jpg", b"<script>alert(1)</script>", "image/jpeg")})
     assert not_image.status_code == 400
+    fake_pdf = client.post(f"/api/applications/{app_id}/evidence", data={"type": "statement"},
+                           files={"file": ("s.pdf", b"%PDF-1.4 not really", "application/pdf")})
+    assert fake_pdf.status_code == 400
+
+
+def test_real_applications_need_sign_in(client):
+    r = client.post("/api/applications", json={"market": "ID", "language": "id",
+                                               "persona": {"name": "A", "business": "warung", "city": ""},
+                                               "consent": {"photos": True, "voice": True}})
+    assert r.status_code == 401
 
 
 def test_extract_stream_reads_the_notebook(client):

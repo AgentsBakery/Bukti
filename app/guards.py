@@ -35,11 +35,12 @@ LIMITS = {
     "interview": Limit(10, 3600),   # live voice sessions
     "decision": Limit(120, 3600),
     "copilot": Limit(60, 3600),
+    "edit": Limit(300, 3600),       # relabel / remove evidence, delete an application
 }
 
 MAX_CONCURRENT_STAGES = 8
 MAX_CONCURRENT_INTERVIEWS = 4
-MAX_EVIDENCE_PER_APPLICATION = 12
+MAX_EVIDENCE_PER_APPLICATION = 20  # photos and PDF pages together
 
 stage_slots = asyncio.Semaphore(MAX_CONCURRENT_STAGES)
 interview_slots = asyncio.Semaphore(MAX_CONCURRENT_INTERVIEWS)

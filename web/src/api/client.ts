@@ -58,8 +58,20 @@ export interface BuktiApi {
   health(): Promise<Health>
   listPacks(): Promise<DemoPack[]>
   loadPack(packId: string): Promise<{ application_id: string }>
-  createApplication(body: { market: Market; language: Lang; persona?: Persona }): Promise<{ application_id: string }>
-  uploadEvidence(appId: string, file: Blob, type: EvidenceType, filename?: string): Promise<Evidence>
+  /** A real application for the signed-in borrower. */
+  createApplication(body: {
+    market: Market
+    language: Lang
+    persona: Persona
+    consent: { photos: boolean; voice: boolean }
+  }): Promise<{ application_id: string }>
+  /** One photo or PDF. Without a type, Gemini labels it. A PDF returns one item per page. */
+  uploadEvidence(appId: string, file: Blob, type?: EvidenceType, filename?: string): Promise<Evidence[]>
+  updateEvidence(appId: string, evidenceId: string, type: EvidenceType): Promise<Evidence>
+  deleteEvidence(appId: string, evidenceId: string): Promise<void>
+  deleteApplication(appId: string): Promise<void>
+  /** The signed-in borrower's real applications. */
+  myApplications(): Promise<ApplicationSummary[]>
   getApplication(appId: string): Promise<Application>
   listApplications(): Promise<ApplicationSummary[]>
   extractStream(appId: string, handlers: StreamHandlers): Unsubscribe

@@ -8,7 +8,7 @@ import { hasKey } from '../i18n/strings'
 import { stopSpeech } from '../lib/speech'
 import { useBorrower } from './context'
 import { InkOrb } from './InkOrb'
-import { SpeakerButton } from './Scaffold'
+import { SpeakerButton, StepScaffold } from './Scaffold'
 
 type Phase = 'intro' | 'connecting' | 'live' | 'done' | 'denied' | 'error'
 interface Turn {
@@ -43,6 +43,31 @@ export function FactChip({ fact, index, lang, label }: { fact: Fact; index: numb
 }
 
 export function CeritaStep() {
+  const { app } = useBorrower()
+  // A real borrower who didn't allow the voice interview goes straight to the result.
+  return app.kind === 'real' && app.consent && !app.consent.voice ? <NoVoice /> : <LiveCerita />
+}
+
+function NoVoice() {
+  const { t, goto } = useBorrower()
+  return (
+    <StepScaffold
+      title={t('noVoiceTitle')}
+      lead={t('noVoiceLead')}
+      bottom={
+        <button type="button" className="btn-ink w-full" onClick={() => goto('hasil')}>
+          {t('seeResult')} <ArrowRight size={22} aria-hidden />
+        </button>
+      }
+    >
+      <div className="grid place-items-center px-6 py-10 text-ink/30" aria-hidden>
+        <MicOff size={72} strokeWidth={1.5} />
+      </div>
+    </StepScaffold>
+  )
+}
+
+function LiveCerita() {
   const { app, t, lang, goto, refresh } = useBorrower()
   const already = app.facts.length > 0 && ['interviewed', 'assessing', 'ready', 'decided'].includes(app.status)
   const [phase, setPhase] = useState<Phase>(already ? 'done' : 'intro')

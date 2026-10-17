@@ -2,7 +2,9 @@
 
 export type Market = 'ID' | 'IN'
 export type Lang = 'id' | 'ta' | 'en'
-export type EvidenceType = 'ledger' | 'statement' | 'receipt' | 'shop'
+export type EvidenceType = 'ledger' | 'statement' | 'receipt' | 'shop' | 'other'
+export type EvidenceStatus = 'ready' | 'needs_review' | 'excluded'
+export type CaseKind = 'demo' | 'real'
 export type Status = 'draft' | 'extracting' | 'extracted' | 'interviewed' | 'assessing' | 'ready' | 'decided'
 export type AgentName = 'extractor' | 'interviewer' | 'verifier' | 'reconciler' | 'integrity' | 'benchmark' | 'policy' | 'memo'
 
@@ -29,6 +31,15 @@ export interface Evidence {
   url: string
   width: number
   height: number
+  // Real uploads only
+  original_name?: string
+  page?: number | null
+  parent_id?: string | null
+  ai_type?: EvidenceType | null
+  ai_confidence?: number | null
+  label_source?: 'pack' | 'ai' | 'borrower'
+  status?: EvidenceStatus
+  note?: string
 }
 
 /** [ymin, xmin, ymax, xmax], each normalised 0–1000 (Gemini convention). */
@@ -151,10 +162,15 @@ export interface Application {
   agent_trace: AgentStep[]
   decision: Decision | null
   owner_uid?: string | null
+  kind?: CaseKind
+  consent?: { photos: boolean; voice: boolean; ts: string } | null
+  /** What the current viewer may do (sent by the server for every application it returns). */
+  access?: { edit: boolean; decide: boolean; officer: boolean; owner: boolean }
 }
 
 export interface ApplicationSummary {
   id: string
+  kind?: CaseKind
   persona: Persona
   market: Market
   status: Status
@@ -221,7 +237,7 @@ export interface User {
   email: string
   name: string
   photo_url: string | null
-  role: 'officer'
+  role: 'officer' | 'borrower'
   created_at: string
   last_login_at: string
   login_count: number

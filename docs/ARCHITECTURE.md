@@ -103,6 +103,24 @@ flowchart TD
   A & R & F --> LISTEN[Listen: TTS in her language]
 ```
 
+### Borrower with their own records (real application)
+
+```mermaid
+flowchart TD
+  L[Landing: Apply with your own records] --> SIGN[Sign in with Google]
+  SIGN --> START[Start: language · name · shop · city · country<br/>consent: photos (required) · voice interview]
+  START --> UP[Foto: take a photo or pick many photos / PDFs]
+  UP -->|3 uploads at a time| GCS[(Cloud Storage<br/>applications/case/file/<br/>page.jpg + original)]
+  GCS --> CLS[Gemini 3.8 Flash labels each page<br/>notebook · statement · receipt · shop · not used]
+  CLS -->|low confidence| CHECK[“Please check” — borrower confirms or changes]
+  CLS --> READY[All labels settled, ≥1 notebook page]
+  CHECK --> READY
+  READY --> READ[Read: statement first-class<br/>transactions added up per day]
+  READ --> CERITA[Cerita, if voice allowed]
+  CERITA --> HASIL[Hasil + officer decides]
+  HASIL --> ME[My applications: status · officer view · delete]
+```
+
 ### Loan officer (desktop)
 
 ```mermaid
@@ -167,6 +185,7 @@ flowchart TB
 
 | Agent | Type | Model | Decides or explains | Guardrails |
 |---|---|---|---|---|
+| Classifier | function, on upload | gemini-3.8-flash | Sorts | labels each uploaded page (notebook, statement, receipt, shop, other) with a confidence; below 0.6 the borrower must confirm; 25 s timeout, one retry, then the borrower picks |
 | Extractor | `BaseAgent` (custom) | gemini-3.8-flash | Reads | response schema, bbox clamp, implausible-amount drop, 60 s timeout + hedge, cache by image hash |
 | Interviewer | `LlmAgent` (live) | gemini-3.8-live | Asks | no protected attributes, never promises a loan, 5-min cap, reconnect once, quotes only reach the memo after Model Armor |
 | Benchmark | `BaseAgent` | — (BigQuery) | Decides input | validated identifiers, parameterised query, cached |
@@ -392,6 +411,9 @@ GROUP BY app_id ORDER BY usd DESC;
 - Demo data is synthetic; accuracy numbers come from team-handwritten pages, not real borrowers.
 - One Cloud Run instance by design (in-memory sessions); scaling out needs Agent Platform Sessions for ADK and
   Firestore-only reads.
-- The officer console is open to guests in the demo; production would require sign-in and roles for officers.
+- Demo cases are open to everyone by design. Real cases are private to their borrower and the loan officers listed
+  in `BUKTI_OFFICER_EMAILS`; there is no admin screen for roles yet.
+- A notebook with no payment statement (or one covering other dates) can't be verified; such cases are referred
+  to an officer (sample policy §2.1) rather than scored.
 - Live interview runs in us-central1 (the only Live region), so audio crosses regions.
 - Sign-in requires the Google provider to be enabled in Firebase (see OPERATIONS.md).

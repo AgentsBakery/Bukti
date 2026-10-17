@@ -1,4 +1,4 @@
-import { ArrowRight, BookOpenText, Camera, CircleCheck, ShieldCheck, X } from 'lucide-react'
+import { ArrowRight, BookOpenText, Camera, CircleCheck, Info, ShieldCheck, X } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import { Dialog } from 'radix-ui'
 import { useCallback, useState } from 'react'
@@ -9,12 +9,15 @@ import { CaptureSheet } from './CaptureSheet'
 import { useBorrower } from './context'
 import { EvidenceTray } from './EvidenceTray'
 import { ProofLift, summarise, type LiftSummary } from './ProofLift'
+import { RealUploads } from './RealUploads'
 import { StepScaffold } from './Scaffold'
 
 const AFTER_EXTRACT = ['extracted', 'interviewed', 'assessing', 'ready', 'decided']
 
 export function FotoStep() {
   const { app, t, refresh, goto, portal } = useBorrower()
+  const real = app.kind === 'real'
+  const [uploading, setUploading] = useState(false)
   const extracted = app.entries.length > 0 && AFTER_EXTRACT.includes(app.status)
   const [mode, setMode] = useState<'tray' | 'live' | 'static'>(() =>
     isStreaming('extract', app.id) ? 'live' : extracted || app.status === 'extracting' ? 'static' : 'tray',
@@ -41,7 +44,12 @@ export function FotoStep() {
   )
   const onError = useCallback((m: string) => setError(m), [])
 
-  const hasLedger = app.evidence.some((e) => e.type === 'ledger')
+  const usable = app.evidence.filter((e) => e.status !== 'excluded')
+  const hasLedger = usable.some((e) => e.type === 'ledger')
+  const needsReview = app.evidence.some((e) => e.status === 'needs_review')
+  const hasStatement = usable.some((e) => e.type === 'statement')
+  const canRead = hasLedger && !(real && (needsReview || uploading))
+  const blocker = !real || uploading ? null : !hasLedger ? t('needLedger') : needsReview ? t('checkFirst') : null
   const reading = mode === 'live' && !summary && !error
 
   if (mode === 'tray') {
@@ -52,13 +60,30 @@ export function FotoStep() {
         speak={t('fotoSpeak')}
         speakId="foto"
         bottom={
-          <button type="button" className="btn-ink w-full" onClick={start} disabled={!hasLedger}>
-            <BookOpenText size={23} aria-hidden /> {t('readMyBook')}
-          </button>
+          <>
+            {blocker ? (
+              <p className="mb-2 text-center text-[14.5px] font-bold text-soot-2" aria-live="polite">
+                {blocker}
+              </p>
+            ) : null}
+            <button type="button" className="btn-ink w-full" onClick={start} disabled={!canRead}>
+              <BookOpenText size={23} aria-hidden /> {t('readMyBook')}
+            </button>
+          </>
         }
       >
         <div className="px-4 pb-6 pt-5">
-          <EvidenceTray evidence={app.evidence} onOpen={setPreview} />
+          <EvidenceTray evidence={usable} onOpen={setPreview} />
+          {real ? (
+            <>
+              <RealUploads onPreview={setPreview} onBusy={setUploading} />
+              {hasLedger && !hasStatement ? (
+                <p className="mt-4 flex gap-2.5 rounded-2xl border-2 border-turmeric/60 bg-turmeric-soft/40 p-3 text-[14.5px] leading-snug text-soot">
+                  <Info size={19} className="mt-0.5 shrink-0 text-turmeric-deep" aria-hidden /> {t('noStatementTip')}
+                </p>
+              ) : null}
+            </>
+          ) : (
           <motion.button
             type="button"
             initial={{ opacity: 0, y: 8 }}
@@ -69,6 +94,7 @@ export function FotoStep() {
           >
             <Camera size={22} aria-hidden /> {t('addPhoto')}
           </motion.button>
+          )}
           <p className="mt-5 flex items-center justify-center gap-2 text-center text-[14px] text-soot-2">
             <ShieldCheck size={17} className="shrink-0 text-leaf" aria-hidden /> {t('privacy')}
           </p>

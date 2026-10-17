@@ -10,7 +10,7 @@ import {
   type StreamHandlers,
   type Unsubscribe,
 } from './client'
-import type { Application, AuthConfig, CopilotEvent, InterviewServerMessage, RunEvent, StreamEvent, User } from './types'
+import type { Application, AuthConfig, CopilotEvent, Evidence, InterviewServerMessage, RunEvent, StreamEvent, User } from './types'
 
 // Optional sign-in: when a token provider is set, every /api call carries a fresh Firebase ID token.
 let tokenProvider: (() => Promise<string | null>) | null = null
@@ -135,18 +135,22 @@ async function openInterview(
   let ws: WebSocket | null = null
   let mic: MicCapture | null = null
   let closed = false
+  // Audio waits until the sign-in message (if any) has gone first: a real case's server reads it before anything else.
+  let ready = false
 
   // Microphone first: the agent shouldn't start talking before the borrower can answer.
   options?.onAskingMic?.()
   try {
     mic = await startMic((frame) => {
-      if (ws && ws.readyState === WebSocket.OPEN) ws.send(frame)
+      if (ws && ready && ws.readyState === WebSocket.OPEN) ws.send(frame)
     })
   } catch (err) {
     player.close()
     throw new MicUnavailableError(err instanceof Error ? err.message : String(err))
   }
 
+  // Browsers can't put an Authorization header on a WebSocket, so the token goes in the first message (never the URL).
+  const token = tokenProvider ? await tokenProvider().catch(() => null) : null
   const sock = new WebSocket(wsUrl(`/ws/interview/${encodeURIComponent(appId)}?lang=${lang}`))
   ws = sock
   sock.binaryType = 'arraybuffer'
@@ -192,6 +196,8 @@ async function openInterview(
       const t = window.setTimeout(() => reject(new Error('Interview connection timed out')), 10000)
       sock.addEventListener('open', () => {
         window.clearTimeout(t)
+        if (token) sock.send(JSON.stringify({ type: 'auth', token }))
+        ready = true
         resolve()
       })
       sock.addEventListener('error', () => {
@@ -231,12 +237,22 @@ export function createHttpApi(): BuktiApi {
     listPacks: () => json('/api/demo/packs'),
     loadPack: (packId) => json(`/api/demo/packs/${enc(packId)}/load`, { method: 'POST' }),
     createApplication: (body) => json('/api/applications', { method: 'POST', body: JSON.stringify(body) }),
-    uploadEvidence: (appId, file, type, filename) => {
+    uploadEvidence: async (appId, file, type, filename) => {
       const fd = new FormData()
-      fd.append('file', file, filename ?? `${type}.jpg`)
-      fd.append('type', type)
-      return json(`/api/applications/${enc(appId)}/evidence`, { method: 'POST', body: fd })
+      fd.append('file', file, filename ?? (file.type === 'application/pdf' ? 'document.pdf' : 'photo.jpg'))
+      if (type) fd.append('type', type)
+      const out = await json<Evidence | Evidence[]>(`/api/applications/${enc(appId)}/evidence`, { method: 'POST', body: fd })
+      return Array.isArray(out) ? out : [out]
     },
+    updateEvidence: (appId, evidenceId, type) =>
+      json(`/api/applications/${enc(appId)}/evidence/${enc(evidenceId)}`, { method: 'PATCH', body: JSON.stringify({ type }) }),
+    deleteEvidence: async (appId, evidenceId) => {
+      await json(`/api/applications/${enc(appId)}/evidence/${enc(evidenceId)}`, { method: 'DELETE' })
+    },
+    deleteApplication: async (appId) => {
+      await json(`/api/applications/${enc(appId)}`, { method: 'DELETE' })
+    },
+    myApplications: () => json('/api/me/applications'),
     getApplication: (appId) => json<Application>(`/api/applications/${enc(appId)}`),
     listApplications: () => json('/api/applications'),
     extractStream: (appId, handlers) => sse(`/api/applications/${enc(appId)}/extract/stream`, handlers),

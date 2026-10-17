@@ -71,8 +71,8 @@ export function CaptureSheet({ open, onOpenChange, onAdded }: { open: boolean; o
     setBusy(true)
     setErr(null)
     try {
-      const ev = await api.uploadEvidence(app.id, file, type, file.name)
-      onAdded(ev)
+      const added = await api.uploadEvidence(app.id, file, type, file.name)
+      added.forEach(onAdded)
       onOpenChange(false)
     } catch {
       setErr(t('errorGeneric'))

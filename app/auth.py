@@ -1,8 +1,9 @@
-"""Optional Google sign-in (Firebase Auth).
+"""Google sign-in (Firebase Auth).
 
-Sign-in is never required. When a request carries a Firebase ID token we verify it against Google's
-public keys and attach the user; otherwise the request proceeds as a guest. Users are stored in the
-Firestore `users` collection.
+Demo cases never need sign-in. A real application needs the borrower to sign in, and only loan officers (see
+app/access.py) can decide one. When a request carries a Firebase ID token we verify it against Google's public
+keys and attach the user; otherwise the request proceeds as a guest. Users are stored in the Firestore `users`
+collection.
 """
 
 from __future__ import annotations
@@ -39,7 +40,7 @@ class User(BaseModel):
     email: str
     name: str
     photo_url: str | None = None
-    role: str = "officer"
+    role: str = "borrower"  # "officer" when the email is in BUKTI_OFFICER_EMAILS
     created_at: str
     last_login_at: str
     login_count: int = 1
@@ -75,9 +76,14 @@ def _verify(token: str) -> dict:
 async def caller_from(headers) -> Caller | None:
     """Returns the signed-in caller, or None for guests. An invalid token is treated as a guest, not an error."""
     auth = headers.get("authorization", "")
-    if not auth.lower().startswith("bearer ") or not auth_enabled():
+    if not auth.lower().startswith("bearer "):
         return None
-    token = auth.split(" ", 1)[1].strip()
+    return await caller_from_token(auth.split(" ", 1)[1].strip())
+
+
+async def caller_from_token(token: str) -> Caller | None:
+    if not token or not auth_enabled():
+        return None
     try:
         claims = await asyncio.to_thread(_verify, token)
     except Exception as exc:  # noqa: BLE001 - expired or forged tokens fall back to guest
@@ -114,13 +120,12 @@ class UserStore:
             except Exception:  # noqa: BLE001
                 log.exception("firestore unavailable for users")
 
-    async def upsert_login(self, c: Caller) -> User:
+    async def upsert_login(self, c: Caller, role: str) -> User:
         now = now_iso()
         existing = await self.get(c.uid)
         user = User(uid=c.uid, email=c.email, name=c.name, photo_url=c.picture,
                     created_at=existing.created_at if existing else now, last_login_at=now,
-                    login_count=(existing.login_count + 1) if existing else 1,
-                    role=existing.role if existing else "officer")
+                    login_count=(existing.login_count + 1) if existing else 1, role=role)
         self._mem[c.uid] = user
         if self._fs is not None:
             try:

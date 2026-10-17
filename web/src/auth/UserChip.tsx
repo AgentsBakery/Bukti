@@ -1,4 +1,4 @@
-import { LogIn, LogOut } from 'lucide-react'
+import { LayoutDashboard, ListChecks, LogIn, LogOut } from 'lucide-react'
 import { DropdownMenu } from 'radix-ui'
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router'
@@ -68,7 +68,19 @@ export function UserChip({ tone = 'ink' }: { tone?: 'ink' | 'paper' }) {
               <p className="truncate text-[12px] text-soot-2">{user.email}</p>
             </div>
           </div>
-          <p className="font-hand border-t border-soot/10 px-2 pb-1 pt-2 text-[14px] text-soot-2">Your name goes on the decisions you sign.</p>
+          <p className="font-hand border-t border-soot/10 px-2 pb-1 pt-2 text-[14px] text-soot-2">
+            {user.role === 'officer' ? 'Loan officer — your name goes on the decisions you sign.' : 'Borrower — your applications stay private to you and the loan officers.'}
+          </p>
+          <DropdownMenu.Item asChild>
+            <Link to="/me" className="mt-1 flex min-h-[40px] items-center gap-2 rounded-lg px-2 text-[14px] font-bold text-ink outline-none data-[highlighted]:bg-paper-2">
+              <ListChecks size={16} aria-hidden /> My applications
+            </Link>
+          </DropdownMenu.Item>
+          <DropdownMenu.Item asChild>
+            <Link to="/console" className="flex min-h-[40px] items-center gap-2 rounded-lg px-2 text-[14px] font-bold text-ink outline-none data-[highlighted]:bg-paper-2">
+              <LayoutDashboard size={16} aria-hidden /> Loan officer console
+            </Link>
+          </DropdownMenu.Item>
           <DropdownMenu.Item
             onSelect={() => void signOut()}
             className="mt-1 flex min-h-[40px] cursor-pointer items-center gap-2 rounded-lg px-2 text-[14px] font-bold text-chili-ink outline-none data-[highlighted]:bg-chili/8"

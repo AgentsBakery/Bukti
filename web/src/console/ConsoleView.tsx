@@ -1,4 +1,4 @@
-import { CircleHelp, FileText, NotebookPen, Receipt, ScrollText, Sparkles, Store } from 'lucide-react'
+import { CircleHelp, Eye, FileText, FileX, NotebookPen, Receipt, ScrollText, Sparkles, Store } from 'lucide-react'
 import { Dialog, Tabs } from 'radix-ui'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { api } from '../api'
@@ -100,7 +100,7 @@ function ConsoleLedger({ app }: { app: Application }) {
 
 function EvidenceTray({ app, viewEv, setViewEv }: { app: Application; viewEv: string | null; setViewEv: (id: string) => void }) {
   const { resolved } = useLink()
-  const icon = { ledger: NotebookPen, statement: FileText, receipt: Receipt, shop: Store }
+  const icon = { ledger: NotebookPen, statement: FileText, receipt: Receipt, shop: Store, other: FileX }
   const entryEv = new Set([...resolved.entries].map((id) => app.entries.find((e) => e.id === id)?.evidence_id))
   return (
     <section className="paper-card px-3 pb-3 pt-2.5">
@@ -286,7 +286,7 @@ function Body({ app, replace, compact, onPrevNext, help, setHelp, left }: { app:
           </Tabs.Content>
         </Tabs.Root>
         <div className="shrink-0">
-          <DecisionPanel app={app} onDecided={replace} />
+          {app.access && !app.access.decide ? <ReadOnlyNote app={app} /> : <DecisionPanel app={app} onDecided={replace} />}
         </div>
       </div>
       <HelpDialog open={help} onOpenChange={setHelp} />
@@ -296,6 +296,19 @@ function Body({ app, replace, compact, onPrevNext, help, setHelp, left }: { app:
 }
 
 /** The officer console for one application. `compact` drops chrome for the split demo view. */
+/** Shown instead of the decision controls to anyone who isn't a loan officer on a real application. */
+function ReadOnlyNote({ app }: { app: Application }) {
+  return (
+    <div className="paper-card flex items-start gap-3 p-3.5 text-[13.5px] leading-snug text-soot">
+      <Eye size={18} className="mt-0.5 shrink-0 text-ink" aria-hidden />
+      <p>
+        <span className="font-extrabold text-ink">Read-only view.</span> Only a loan officer can decide a real application.
+        {app.decision ? ` Decision: ${app.decision.action} by ${app.decision.officer}.` : ' The decision will appear here.'}
+      </p>
+    </div>
+  )
+}
+
 export function ConsoleView({ appId, compact = false, onPrevNext, left }: { appId: string; compact?: boolean; onPrevNext?: (d: -1 | 1) => void; left?: ReactNode }) {
   const { app, error, replace } = useApplication(appId, 1500)
   const [help, setHelp] = useState(false)
@@ -315,6 +328,7 @@ export function ConsoleView({ appId, compact = false, onPrevNext, left }: { appI
               {businessName(app.persona)} · {app.persona.city} · {app.market === 'ID' ? 'Indonesia' : 'India'} · {app.language === 'ta' ? 'Tamil' : app.language === 'id' ? 'Bahasa' : 'English'}
             </span>
             <StatusPill status={app.status} />
+            {app.kind === 'real' ? <span className="chip shrink-0 !border-ink/40 !text-ink">Real application</span> : null}
           </div>
           <button type="button" onClick={() => setHelp(true)} className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 text-[12px] font-bold text-soot-2 hover:bg-card/60 hover:text-ink" aria-label="Keyboard shortcuts">
             <CircleHelp size={15} aria-hidden /> Shortcuts <kbd className="font-mono text-[10.5px]">?</kbd>

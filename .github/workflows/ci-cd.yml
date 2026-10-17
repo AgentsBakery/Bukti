@@ -210,6 +210,8 @@ jobs:
           gcloud run deploy "$SERVICE" --region "$REGION" --quiet \
             --image "${IMAGE}@${{ needs.container.outputs.digest }}" \
             --service-account "${{ vars.RUNTIME_SA }}"
+          # A staging deploy (--no-traffic --tag) pins traffic to a revision; always hand it back to the new one.
+          gcloud run services update-traffic "$SERVICE" --region "$REGION" --to-latest --quiet
           url=$(gcloud run services describe "$SERVICE" --region "$REGION" --format 'value(status.url)')
           echo "url=${url}" >> "$GITHUB_OUTPUT"
       - name: Smoke test

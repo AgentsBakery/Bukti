@@ -9,7 +9,9 @@ from pydantic import BaseModel, Field
 
 Market = Literal["ID", "IN"]
 Lang = Literal["id", "ta", "en"]
-EvidenceType = Literal["ledger", "statement", "receipt", "shop"]
+EvidenceType = Literal["ledger", "statement", "receipt", "shop", "other"]
+EvidenceStatus = Literal["ready", "needs_review", "excluded"]
+CaseKind = Literal["demo", "real"]
 Status = Literal["draft", "extracting", "extracted", "interviewed", "assessing", "ready", "decided"]
 AgentName = Literal["extractor", "interviewer", "verifier", "reconciler", "integrity", "benchmark", "policy", "memo"]
 CheckResult = Literal["pass", "warn", "fail"]
@@ -24,9 +26,9 @@ def now_iso() -> str:
 
 
 class Persona(BaseModel):
-    name: str
-    business: str
-    city: str
+    name: str = Field(min_length=1, max_length=80)
+    business: str = Field(min_length=1, max_length=80)
+    city: str = Field(default="", max_length=80)
 
 
 class DemoPack(BaseModel):
@@ -48,7 +50,19 @@ class Evidence(BaseModel):
     height: int
     sha256: str = ""
     ahash: str = ""
-    src: str = ""  # where the bytes live: "pack:<relative path>" or "upload:<evidence id>"
+    src: str = ""  # where the bytes live: "pack:<path>", "object:<storage path>" (uploads), legacy "upload:<id>"
+    # Real uploads (empty for demo-pack evidence)
+    mime: str = "image/jpeg"
+    original_name: str = ""
+    gcs_uri: str = ""        # the processed page image in Cloud Storage
+    original_uri: str = ""   # the file exactly as uploaded (a PDF is stored once, beside its first page)
+    page: int | None = None  # 1-based page number when the evidence is a page of a PDF
+    parent_id: str | None = None  # id shared by all pages of one uploaded PDF
+    ai_type: EvidenceType | None = None
+    ai_confidence: float | None = None
+    label_source: Literal["pack", "ai", "borrower"] = "pack"
+    status: EvidenceStatus = "ready"
+    note: str = ""
 
 
 class Entry(BaseModel):
@@ -161,10 +175,18 @@ class Decision(BaseModel):
     ts: str = Field(default_factory=now_iso)
 
 
+class Consent(BaseModel):
+    photos: bool
+    voice: bool
+    ts: str = Field(default_factory=now_iso)
+
+
 class Application(BaseModel):
     id: str
+    kind: CaseKind = "demo"
     pack_id: str | None = None
     owner_uid: str | None = None
+    consent: Consent | None = None
     persona: Persona
     market: Market
     language: Lang
@@ -193,6 +215,7 @@ class Application(BaseModel):
 
 class ApplicationSummary(BaseModel):
     id: str
+    kind: CaseKind = "demo"
     persona: Persona
     market: Market
     status: Status
@@ -201,10 +224,20 @@ class ApplicationSummary(BaseModel):
     decision: str | None = None
 
 
+class ConsentIn(BaseModel):
+    photos: bool
+    voice: bool
+
+
 class CreateApplication(BaseModel):
     market: Market
     language: Lang
-    persona: Persona | None = None
+    persona: Persona
+    consent: ConsentIn
+
+
+class EvidenceUpdate(BaseModel):
+    type: EvidenceType
 
 
 class DecisionIn(BaseModel):

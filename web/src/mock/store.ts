@@ -50,4 +50,8 @@ export const store = {
   list(): Application[] {
     return Object.values(mem).map(clone)
   },
+  remove(id: string) {
+    delete mem[id]
+    persist()
+  },
 }

@@ -20,11 +20,16 @@ Officer console polls GET /api/applications/{id} every 1.5 s and posts the decis
 | GET | `/api/health` | | `{ok, version, models}` |
 | GET | `/api/demo/packs` | | `DemoPack[]` |
 | POST | `/api/demo/packs/{pack_id}/load` | | `{application_id}` |
-| POST | `/api/applications` | `{market: "ID"\|"IN", language: "id"\|"ta"\|"en", persona?: Persona}` | `{application_id}` |
-| POST | `/api/applications/{id}/evidence` | multipart: `file`, `type` | `Evidence` |
-| GET | `/api/evidence/{evidence_id}/image` | | the image bytes |
-| GET | `/api/applications/{id}` | | `Application` |
-| GET | `/api/applications` | | `ApplicationSummary[]` (officer queue) |
+| POST | `/api/applications` | `{market, language, persona: Persona, consent: {photos: true, voice: bool}}` — **sign-in required** | `{application_id}` (a real case owned by the caller) |
+| POST | `/api/applications/{id}/evidence` | multipart: `file` (image ≤15 MB or PDF ≤20 MB, ≤10 pages), `type?` | `Evidence[]` — one per PDF page; without `type` Gemini labels each |
+| PATCH | `/api/applications/{id}/evidence/{evidence_id}` | `{type: EvidenceType}` | `Evidence` (relabelled by the borrower) |
+| DELETE | `/api/applications/{id}/evidence/{evidence_id}` | | `{deleted}` (and its files in Cloud Storage) |
+| DELETE | `/api/applications/{id}` | owner only | `{deleted}` — the case, its Firestore document and every file |
+| GET | `/api/applications/{id}/evidence/{evidence_id}/image` | `exp`, `sig` (real cases) | the page image (signed link, ≤2 h) |
+| GET | `/api/evidence/{evidence_id}/image` | | demo-pack image bytes |
+| GET | `/api/applications/{id}` | | `Application` + `access: {edit, decide, officer, owner}` |
+| GET | `/api/applications` | | `ApplicationSummary[]` (console queue: real cases the caller may see, then demos) |
+| GET | `/api/me/applications` | sign-in required | the caller's real `ApplicationSummary[]` |
 | GET | `/api/applications/{id}/extract/stream` | | SSE stream (see events) |
 | GET | `/api/applications/{id}/assess/stream` | | SSE stream (see events) |
 | POST | `/api/applications/{id}/decision` | `{action: "approve"\|"adjust"\|"decline", amount?: int, note?: string}` | `Application` |
@@ -172,6 +177,8 @@ interface ApplicationSummary { id: string; persona: Persona; market: Market; sta
 ## Interview WebSocket `/ws/interview/{id}?lang=id`
 
 Client → server:
+- first text frame, when signed in: `{"type":"auth","token":"<Firebase ID token>"}` — required for a real case
+  (browsers can't put headers on a WebSocket, and tokens never go in the URL); demo cases ignore it
 - binary frames: raw PCM16 mono 16 kHz little-endian microphone audio
 - text `{"type":"end"}` to finish early
 
@@ -186,10 +193,20 @@ Server → client:
   - `{type:"done", facts: Fact[]}`
   - `{type:"error", message:string}`
 
-## Auth (optional Google sign-in via Firebase Auth)
+## Auth (Google sign-in via Firebase Auth) and access
 
-Sign-in is never required. When signed in, the client sends `Authorization: Bearer <Firebase ID token>` on every
-`/api` request; the backend verifies it, links applications to the user, and records the officer's name on decisions.
+Demo cases never need sign-in. A **real** application needs the borrower to sign in. When signed in, the client sends
+`Authorization: Bearer <Firebase ID token>` on every `/api` request; the backend verifies it.
+
+| Who | Demo case | Real case |
+|---|---|---|
+| anyone | view, add/relabel evidence, run, decide | — (404) |
+| the borrower who created it | as above | view, add/relabel/remove evidence, run, interview, delete |
+| a loan officer (`BUKTI_OFFICER_EMAILS`) | as above | view (read-only evidence), run, **decide** |
+
+Photos of real cases are served through links signed with HMAC (`BUKTI_URL_KEY`, from Secret Manager) that expire
+within two hours, because `<img>` tags can't carry a sign-in header. Files live in
+`gs://bukti-ai-evidence/applications/{case}/{evidence}/page.jpg` and `original.<ext>`; the bucket blocks public access.
 
 | Method | Path | Body | Returns |
 |---|---|---|---|
@@ -198,12 +215,14 @@ Sign-in is never required. When signed in, the client sends `Authorization: Bear
 | GET | `/api/me` | (Bearer optional) | `User` or `401` |
 
 ```ts
-interface User { uid: string; email: string; name: string; photo_url: string | null; role: "officer";
+interface User { uid: string; email: string; name: string; photo_url: string | null; role: "officer" | "borrower";
                  created_at: string; last_login_at: string; login_count: number }
 ```
 
-`Application.owner_uid?: string | null` and `Decision.officer` now carry the signed-in officer's name (or
-"Loan officer (demo)" for guests).
+`Application.kind: "demo" | "real"`, `Application.owner_uid`, `Application.consent: {photos, voice, ts}`.
+`Evidence` for uploads adds `original_name, page, parent_id, ai_type, ai_confidence, label_source ("ai"|"borrower"),
+status ("ready"|"needs_review"|"excluded"), note`; `EvidenceType` adds `"other"` (not used). `Decision.officer` carries
+the signed-in officer's name (or "Loan officer (demo)" for guests on demo cases).
 
 ## Officer Copilot (tool-using Gemini agent over one case)
 

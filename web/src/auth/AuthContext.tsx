@@ -69,9 +69,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const fallback: User = {
             uid: fu.uid,
             email: fu.email ?? '',
-            name: fu.displayName ?? fu.email ?? 'Loan officer',
+            name: fu.displayName ?? fu.email ?? 'You',
             photo_url: fu.photoURL,
-            role: 'officer',
+            role: 'borrower',
             created_at: fu.metadata.creationTime ?? new Date().toISOString(),
             last_login_at: new Date().toISOString(),
             login_count: 1,

@@ -40,7 +40,12 @@ function Queue({ items, current }: { items: ApplicationSummary[] | null; current
                 <span className={`font-display grid h-9 w-9 shrink-0 place-items-center rounded-full text-[14px] font-bold ${on ? 'bg-paper text-ink' : 'bg-paper-3 text-ink'}`}>{initials(a.persona)}</span>
                 <span className="min-w-0 flex-1">
                   <span className="flex items-baseline justify-between gap-2">
-                    <span className="truncate text-[13.5px] font-extrabold">{a.persona.name}</span>
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <span className="truncate text-[13.5px] font-extrabold">{a.persona.name}</span>
+                      {a.kind === 'real' ? (
+                        <span className={`shrink-0 rounded px-1 text-[9.5px] font-extrabold uppercase tracking-wide ${on ? 'bg-paper/20 text-paper' : 'bg-turmeric-soft text-turmeric-deep'}`}>Real</span>
+                      ) : null}
+                    </span>
                     <span className={`font-mono shrink-0 text-[10px] ${on ? 'text-paper/60' : 'text-soot-3'}`}>{fmtTime(a.created_at).slice(0, 5)}</span>
                   </span>
                   <span className={`block truncate text-[11.5px] ${on ? 'text-paper/70' : 'text-soot-2'}`}>

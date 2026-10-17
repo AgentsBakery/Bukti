@@ -1,4 +1,4 @@
-import { FileText, Maximize, Minus, NotebookPen, Plus, Receipt, Store } from 'lucide-react'
+import { FileText, FileX, Maximize, Minus, NotebookPen, Plus, Receipt, Store } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Application, BBox, Evidence } from '../api/types'
 import { figure } from '../lib/format'
@@ -11,7 +11,7 @@ interface View {
   y: number
 }
 
-const ICON = { ledger: NotebookPen, statement: FileText, receipt: Receipt, shop: Store }
+const ICON = { ledger: NotebookPen, statement: FileText, receipt: Receipt, shop: Store, other: FileX }
 
 export function evidenceShort(app: Application, e: Evidence): string {
   if (e.type === 'ledger') return `p.${app.evidence.filter((x) => x.type === 'ledger').indexOf(e) + 1}`

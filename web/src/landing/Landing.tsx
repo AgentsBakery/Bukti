@@ -195,6 +195,14 @@ export default function Landing() {
             <motion.p initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, ease, delay: 0.55 }} className="mt-4 max-w-[54ch] text-[16.5px] leading-relaxed text-soot-2">
               Bukti reads the notebook, checks it against her QRIS payments, listens to her story in her own language, and drafts a loan a human officer can approve — with every number traceable to the line it came from.
             </motion.p>
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, ease, delay: 0.65 }} className="mt-7 flex flex-wrap items-center gap-x-5 gap-y-3">
+              <Link to="/start" className="btn-ink">
+                <NotebookPen size={21} aria-hidden /> Apply with your own records <ArrowRight size={20} aria-hidden />
+              </Link>
+              <a href="#demos" className="link-ink flex min-h-[44px] items-center text-[16px]">
+                or try a one-click demo ↓
+              </a>
+            </motion.div>
           </div>
           <motion.div className="relative hidden origin-center min-[1100px]:block" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }}>
             <div className="origin-center scale-[0.92] 2xl:scale-100">
@@ -203,7 +211,7 @@ export default function Landing() {
           </motion.div>
         </section>
 
-        <section aria-label="Try a demo" className="mt-10 min-[1100px]:mt-4">
+        <section id="demos" aria-label="Try a demo" className="mt-10 scroll-mt-6 min-[1100px]:mt-4">
           <div className="grid gap-6 md:grid-cols-3">
             {HERO_CARDS.map((c, i) => (
               <PersonaCard key={c.pack} c={c} i={i} busy={busy} onOpen={() => void open(c.pack)} />

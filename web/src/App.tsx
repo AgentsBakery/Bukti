@@ -11,6 +11,8 @@ const BorrowerApp = lazy(() => import('./borrower/BorrowerApp'))
 const ConsolePage = lazy(() => import('./console/ConsolePage'))
 const DemoPage = lazy(() => import('./demo/DemoPage'))
 const LoginPage = lazy(() => import('./auth/LoginPage'))
+const StartPage = lazy(() => import('./apply/StartPage'))
+const MyApplications = lazy(() => import('./apply/MyApplications'))
 
 function BorrowerRoute() {
   const { appId } = useParams()
@@ -42,6 +44,8 @@ export function App() {
             <Routes>
               <Route path="/" element={<Landing />} />
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/start" element={<StartPage />} />
+              <Route path="/me" element={<MyApplications />} />
               <Route path="/apply/:appId" element={<BorrowerRoute />} />
               <Route path="/console" element={<ConsolePage />} />
               <Route path="/console/:appId" element={<ConsolePage />} />

@@ -373,6 +373,25 @@
   }
 
   /* Chips --------------------------------------------------------------- */
+  /* Text input on paper: large, high-contrast, a turmeric focus ring */
+  .field {
+    display: block;
+    width: 100%;
+    min-height: 56px;
+    border-radius: 16px;
+    border: 2px solid rgb(43 38 32 / 0.18);
+    background: var(--color-card);
+    padding: 0.7rem 1rem;
+    font-size: 17px;
+    color: var(--color-soot);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .field:focus {
+    outline: none;
+    border-color: var(--color-ink);
+    box-shadow: 0 0 0 4px rgb(232 163 23 / 0.35);
+  }
+
   .chip {
     display: inline-flex;
     align-items: center;
