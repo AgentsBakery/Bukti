@@ -1,5 +1,9 @@
 import type {
   Application,
+  AuthConfig,
+  CopilotEvent,
+  RunEvent,
+  User,
   ApplicationSummary,
   DecisionAction,
   DemoPack,
@@ -66,6 +70,20 @@ export interface BuktiApi {
   /** Spoken UI instruction (audio/wav). Rejects when unavailable; callers fall back to speechSynthesis. */
   tts(text: string, lang: Lang): Promise<Blob>
   openInterview(appId: string, lang: Lang, handlers: InterviewHandlers, options?: InterviewOptions): Promise<InterviewConnection>
+
+  // Auth (optional)
+  authConfig(): Promise<AuthConfig>
+  /** Upserts the signed-in user (requires a token from the token provider). */
+  createSession(): Promise<User>
+  me(): Promise<User | null>
+  /** Supplies a fresh Firebase ID token for every /api call, or null when signed out. */
+  setTokenProvider(fn: (() => Promise<string | null>) | null): void
+
+  // Officer Copilot
+  copilot(appId: string, body: { question: string; session_id?: string }, onEvent: (e: CopilotEvent) => void): Unsubscribe
+
+  // Run log
+  listEvents(appId: string): Promise<RunEvent[]>
 }
 
 /** Thrown by openInterview when the microphone can't be used (denied, missing, insecure context). */

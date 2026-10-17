@@ -101,9 +101,20 @@ export function FactsPanel({ app }: { app: Application }) {
               <li
                 key={f.id}
                 className={`cursor-pointer rounded-xl border bg-paper/60 p-3 transition-colors ${lit ? 'border-turmeric-deep ring-2 ring-turmeric/60' : 'border-soot/12 hover:border-soot/30'}`}
+                role="button"
+                tabIndex={0}
+                aria-pressed={lit}
                 onMouseEnter={() => hover([f.id], 'fact')}
                 onMouseLeave={() => hover(null)}
+                onFocus={() => hover([f.id], 'fact')}
+                onBlur={() => hover(null)}
                 onClick={() => pin([f.id], 'fact')}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    pin([f.id], 'fact')
+                  }
+                }}
               >
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-soot-3">{f.label}</span>

@@ -43,7 +43,7 @@ export function isEmpty(r: Resolved) {
   return !r.entries.size && !r.evidence.size && !r.facts.size && !r.checks.size && !r.days.size
 }
 
-type Source = 'memo' | 'photo' | 'ledger' | 'check' | 'metric' | 'fact'
+type Source = 'memo' | 'photo' | 'ledger' | 'check' | 'metric' | 'fact' | 'copilot'
 
 interface LinkCtxValue {
   refs: string[]
@@ -51,7 +51,7 @@ interface LinkCtxValue {
   source: Source | null
   resolved: Resolved
   hover: (refs: string[] | null, source?: Source) => void
-  pin: (refs: string[], source: Source) => void
+  pin: (refs: string[], source: Source, opts?: { toggle?: boolean }) => void
   clear: () => void
   /** id of the most recent explicit pin, to trigger scroll/zoom effects */
   pinSeq: number
@@ -73,8 +73,9 @@ export function LinkProvider({ app, children }: { app: Application | null; child
     }
     setHover({ refs, source })
   }, [])
-  const pin = useCallback((refs: string[], source: Source) => {
-    setPinned((cur) => (cur && cur.refs.join() === refs.join() ? null : { refs, source }))
+  const pin = useCallback((refs: string[], source: Source, opts?: { toggle?: boolean }) => {
+    const toggle = opts?.toggle ?? true
+    setPinned((cur) => (toggle && cur && cur.refs.join() === refs.join() ? null : { refs, source }))
     setPinSeq((n) => n + 1)
   }, [])
   const clear = useCallback(() => {

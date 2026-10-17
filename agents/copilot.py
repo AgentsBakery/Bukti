@@ -28,6 +28,7 @@ from app.genai import adk_client_kwargs
 from app.store import store
 
 log = logging.getLogger("bukti.copilot")
+COPILOT_TIMEOUT_S = 60
 _highlights: dict[str, asyncio.Queue] = defaultdict(asyncio.Queue)
 
 
@@ -141,11 +142,28 @@ async def highlight_evidence(tool_context: ToolContext, refs: list[str], note: s
     return {"status": "ok", "highlighted": len(refs)}
 
 
-INSTRUCTION = """You are Bukti's Officer Copilot. A loan officer is reviewing one micro-business credit case and asks
+async def instruction(rctx) -> str:
+    a = await store.get(rctx.state.get("app_id"))
+    if a is None:
+        return BASE_INSTRUCTION
+    checks = "; ".join(f"{c.id}={c.result}: {c.summary}" for c in a.checks) or "not assessed yet"
+    m = a.metrics
+    glance = (f"Applicant {a.persona.name}, {a.persona.business}, {a.persona.city} ({a.market}, {a.currency}). "
+              f"Decision: {a.memo.decision if a.memo else 'pending'}, amount {a.memo.amount if a.memo else '-'}, "
+              f"tenor {a.memo.tenor_weeks if a.memo else '-'} weeks. "
+              + (f"Notebook sales {m.ledger_sales_total}, statement {m.statement_total}, digital share "
+                 f"{m.digital_share:.0%} (peer band {m.peer_share_band}), weekly pattern {m.weekly_pattern}. " if m else "")
+              + f"{len(a.entries)} notebook lines, {len(a.statement)} statement days, {len(a.facts)} interview facts. "
+              + f"Checks: {checks}")
+    return BASE_INSTRUCTION + "\n\nThe case at a glance (use tools for line-level detail):\n" + glance
+
+
+BASE_INSTRUCTION = """You are Bukti's Officer Copilot. A loan officer is reviewing one micro-business credit case and asks
 you questions about it. Answer from the case's evidence only, using your tools; never guess numbers.
 
 How to work:
-- Use the tools to look things up (summary, checks, notebook entries, payment comparison, interview facts).
+- The case at a glance is below. Call tools only for detail it does not contain, at most 3 tool calls per
+  question, and call independent tools in parallel.
 - When an answer rests on specific notebook lines, days or checks, call highlight_evidence with their ids so the
   officer sees them on the photo.
 - Answer in English in 2-5 short sentences or a few bullets. Quote amounts with the currency. Cite ids in square
@@ -161,8 +179,13 @@ _runner = Runner(
     app_name=APP_NAME,
     agent=LlmAgent(
         name="copilot",
-        model=Gemini(model=settings.model_extract, client_kwargs=adk_client_kwargs()),
-        instruction=INSTRUCTION,
+        # A hung call fails after 25 s and is retried, instead of stalling the officer for a minute.
+        model=Gemini(model=settings.model_extract, client_kwargs={
+            **adk_client_kwargs(),
+            "http_options": types.HttpOptions(timeout=25_000, retry_options=types.HttpRetryOptions(attempts=3)),
+        }),
+        instruction=instruction,
+        generate_content_config=types.GenerateContentConfig(thinking_config=types.ThinkingConfig(thinking_level="low")),
         tools=[get_case_summary, get_checks, get_entries, compare_with_payments, get_interview_facts,
                highlight_evidence],
     ),
@@ -192,7 +215,7 @@ async def ask(app_id: str, question: str, session_id: str | None, user_id: str |
     msg = types.Content(role="user", parts=[types.Part(text=question[:600])])
     answer, refs, seen_calls = "", [], set()
     try:
-        async with asyncio.timeout(90):
+        async with asyncio.timeout(COPILOT_TIMEOUT_S):
             async for event in _runner.run_async(user_id=owner, session_id=session_id, new_message=msg,
                                                  run_config=RunConfig(streaming_mode=StreamingMode.SSE)):
                 while not queue.empty():
@@ -217,9 +240,12 @@ async def ask(app_id: str, question: str, session_id: str | None, user_id: str |
         cited = sorted(set(refs) | {t.strip("[]") for t in answer.split() if t.startswith("[") and t.rstrip(".,").endswith("]")})
         yield {"type": "answer", "text": answer.strip() or "I couldn't find an answer in this case file.",
                "refs": [r.rstrip(".,]").lstrip("[") for r in cited]}
-    except (Exception, TimeoutError) as exc:  # noqa: BLE001
+    except TimeoutError:
+        log.warning("copilot timed out", extra={"app_id": app_id})
+        yield {"type": "error", "message": "The copilot took too long to answer. Please ask again, more narrowly."}
+    except Exception as exc:  # noqa: BLE001
         log.exception("copilot failed", extra={"app_id": app_id})
-        yield {"type": "error", "message": f"The copilot could not answer: {str(exc)[:120]}"}
+        yield {"type": "error", "message": f"The copilot could not answer ({type(exc).__name__}). Please ask again."}
     yield {"type": "done"}
 
 

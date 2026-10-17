@@ -78,7 +78,8 @@ async def _app_or_404(app_id: str) -> Application:
 async def health():
     return {"ok": True, "version": app.version, "project": settings.project,
             "models": {"extract": settings.model_extract, "memo": settings.model_memo,
-                       "live": settings.model_live, "tts": settings.model_tts}}
+                       "live": settings.model_live, "tts": settings.model_tts, "copilot": settings.model_extract},
+            "auth": auth_enabled()}
 
 
 @app.get("/api/demo/packs")

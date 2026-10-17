@@ -189,10 +189,10 @@ const S = {
 
 export type StringKey = keyof typeof S
 
-export function translate(lang: Lang, key: StringKey, vars: Record<string, string | number> = {}): string {
+export function translate(lang: Lang, key: StringKey, vars?: Record<string, string | number>): string {
   const entry = S[key] as Record<Lang, string>
   let s = entry[lang] ?? entry.en
-  for (const [k, v] of Object.entries(vars)) s = s.split(`{${k}}`).join(String(v))
+  for (const [k, v] of Object.entries(vars ?? {})) s = s.split(`{${k}}`).join(String(v))
   return s.replace(/\s{2,}/g, ' ').trim()
 }
 

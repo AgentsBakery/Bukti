@@ -1,6 +1,6 @@
 import { Check, Scale, SlidersHorizontal, X } from 'lucide-react'
 import { Dialog, Slider } from 'radix-ui'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api'
 import type { Application, DecisionAction } from '../api/types'
 import { Stamp } from '../components/Stamp'
@@ -28,6 +28,7 @@ export function DecisionPanel({ app, onDecided }: { app: Application; onDecided:
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  const noteRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     setAmount(app.decision?.amount || proposed)
@@ -168,6 +169,11 @@ export function DecisionPanel({ app, onDecided }: { app: Application; onDecided:
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-50 bg-soot/40 backdrop-blur-[2px]" />
           <Dialog.Content
+            onOpenAutoFocus={(e) => {
+              // put the cursor in the note so Enter confirms straight away
+              e.preventDefault()
+              noteRef.current?.focus()
+            }}
             className="paper-card grain fixed left-1/2 top-1/2 z-50 w-[min(92vw,440px)] -translate-x-1/2 -translate-y-1/2 p-5 data-[state=open]:animate-[fade-up_.2s_ease]"
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
@@ -196,7 +202,7 @@ export function DecisionPanel({ app, onDecided }: { app: Application; onDecided:
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                   rows={2}
-                  autoFocus
+                  ref={noteRef}
                   className="mt-1 w-full resize-none rounded-xl border border-soot/20 bg-paper px-3 py-2 text-[14px] text-soot outline-none focus:border-ink"
                   placeholder={confirm === 'decline' ? 'e.g. Let’s visit the shop and look at the notebook together.' : 'e.g. Verified on site.'}
                 />

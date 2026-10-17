@@ -9,6 +9,7 @@ import { Kawung } from '../components/Kawung'
 import { Logo } from '../components/Logo'
 import { Stamp } from '../components/Stamp'
 import { HeroIllustration } from './HeroIllustration'
+import { UserChip } from '../auth/UserChip'
 
 const ease = [0.22, 0.8, 0.24, 1] as const
 
@@ -146,6 +147,7 @@ export default function Landing() {
             <LayoutDashboard size={18} aria-hidden /> <span className="hidden sm:inline">Loan officer console</span>
             <span className="sm:hidden">Console</span>
           </Link>
+          <UserChip />
         </div>
       </header>
 

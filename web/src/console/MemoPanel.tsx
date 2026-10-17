@@ -85,9 +85,20 @@ function Point({ app, text, refs, tone }: { app: Application; text: string; refs
   return (
     <li
       className={`group relative cursor-pointer rounded-xl py-2 pl-7 pr-2 transition-colors ${on ? 'bg-turmeric/25' : 'hover:bg-paper-2/80'}`}
+      role="button"
+      tabIndex={refs.length ? 0 : -1}
+      aria-pressed={on}
       onMouseEnter={() => refs.length && hover(refs, 'memo')}
       onMouseLeave={() => hover(null)}
+      onFocus={() => refs.length && hover(refs, 'memo')}
+      onBlur={() => hover(null)}
       onClick={() => refs.length && pin(refs, 'memo')}
+      onKeyDown={(e) => {
+        if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget && refs.length) {
+          e.preventDefault()
+          pin(refs, 'memo')
+        }
+      }}
     >
       <span
         className={`absolute left-2 top-[13px] h-2.5 w-2.5 rounded-full ${tone === 'reason' ? 'bg-leaf' : 'bg-turmeric'} ring-[3px] ${tone === 'reason' ? 'ring-leaf/15' : 'ring-turmeric/20'}`}

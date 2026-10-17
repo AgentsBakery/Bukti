@@ -3,6 +3,7 @@
 // the same reasons the real agents would catch them.
 import type { Application, Check, Entry, Fact, Lang, Memo, MemoDecision, Metrics, ScheduleItem } from '../api/types'
 import { figure, money, moneyShort, parseISODate, pct, shortName, weekOfMonth } from '../lib/format'
+import { businessName } from '../lib/text'
 
 export const POLICY = {
   ID: { band: [0.3, 0.46] as [number, number], peerDaily: 470_000, step: 100_000, mult: 0.85, round: 1000, rail: 'QRIS', roundStep: 50_000, shop: 'warung', country: 'Indonesia' },
@@ -370,7 +371,8 @@ function coaching(app: Application, decision: MemoDecision, lang: Lang): string[
   return [...C[lang][decision === 'decline' ? 'refer' : decision]]
 }
 
-export function computeMemo(app: Application, a: Analysis, checks: Check[], lang: Lang, factsEn: Record<string, string> = {}): Memo {
+export function computeMemo(app: Application, a: Analysis, checks: Check[], lang: Lang, englishFacts?: Record<string, string>): Memo {
+  const factsEn = englishFacts ?? {}
   const P = POLICY[app.market]
   const m = app.market
   const { decision, amount, schedule } = decide(app, a, checks)
@@ -382,7 +384,7 @@ export function computeMemo(app: Application, a: Analysis, checks: Check[], lang
   const years = app.facts.find((f) => f.field === 'years_in_business')
   const purpose = app.facts.find((f) => f.field === 'loan_purpose')
   const w = a.weekly
-  const business = app.persona.business.replace(/\s*\(claimed\)/i, '').toLowerCase()
+  const business = businessName(app.persona).toLowerCase()
   const inflation = a.share > 0 ? ((P.band[0] + P.band[1]) / 2) / a.share : 0
 
   let headline: string

@@ -21,16 +21,30 @@ import {
   type Lang,
   type StatementDay,
   type StreamEvent,
+  type User,
 } from '../api/types'
 import { money, pct } from '../lib/format'
 import { affordabilityCheck, analyse, computeChecks, computeMemo, computeMetrics, POLICY } from './engine'
 import { scriptFor } from './interviewScript'
 import { loadLayout, MOCK_PACKS, packLang, type PackLayout } from './packs'
 import { store } from './store'
+import { randomFloat, randomId } from '../lib/random'
+import { mockCopilot } from './copilot'
+import { eventsFor, MODELS, record, recordModel, recordTool, setEventUser } from './events'
+
+function loadMockUser(): User | null {
+  try {
+    return JSON.parse(localStorage.getItem('bukti.mock.user') ?? 'null') as User | null
+  } catch {
+    return null
+  }
+}
+let mockUser: User | null = loadMockUser()
+setEventUser(mockUser?.uid ?? null)
 
 const sleep = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms))
 const now = () => new Date().toISOString()
-const rand = () => Math.random().toString(36).slice(2, 6)
+const rand = () => randomId(4)
 
 function setTrace(app: Application, agent: AgentName, status: Application['agent_trace'][number]['status'], summary: string) {
   const step = app.agent_trace.find((s) => s.agent === agent)
@@ -132,7 +146,10 @@ export function createMockApi(): BuktiApi {
       const pack = MOCK_PACKS.find((p) => p.id === packId)!
       const app = newApplication({ pack_id: packId, persona: pack.persona, market: pack.market, language: packLang(packId) })
       app.evidence = packEvidence(app.id, packId, L)
+      app.owner_uid = mockUser?.uid ?? null
       store.put(app)
+      record('application.created', app.id, { detail: `Demo pack “${packId}” loaded for ${pack.persona.name}` })
+      for (const e of app.evidence) record('evidence.uploaded', app.id, { detail: `${e.label} · ${e.width}×${e.height}` })
       await sleep(350)
       return { application_id: app.id }
     },
@@ -158,6 +175,7 @@ export function createMockApi(): BuktiApi {
       store.update(appId, (a) => {
         a.evidence.push(ev)
       })
+      record('evidence.uploaded', appId, { detail: `${label} · ${img.width}×${img.height} · camera upload` })
       await sleep(250)
       return ev
     },
@@ -195,6 +213,9 @@ export function createMockApi(): BuktiApi {
           setTrace(a, 'extractor', 'running', intro)
         })
         emit({ type: 'agent', agent: 'extractor', status: 'running', summary: intro })
+        const t0 = Date.now()
+        record('stage.started', appId, { detail: 'extract' })
+        record('agent.started', appId, { agent: 'extractor', detail: intro })
         // Like the real extractor: all pages are scanned in parallel, then each page's lines
         // arrive together. The UI paces the lift-off animation itself.
         for (const ev of ledgers) emit({ type: 'evidence_scan', evidence_id: ev.id })
@@ -222,6 +243,7 @@ export function createMockApi(): BuktiApi {
             emit({ type: 'entry', entry })
             await sleep(25)
           }
+          recordModel(appId, 'extractor', MODELS.extract, `${ev.label}: ${lines.length} lines read, bounding boxes kept`, { latency: [4200, 7900], tin: [1650, 1900], tout: [1100, 1600] })
           await sleep(1400)
         }
         if (statementEv && L) {
@@ -234,12 +256,15 @@ export function createMockApi(): BuktiApi {
             emit({ type: 'statement_day', day })
             await sleep(15)
           }
+          recordModel(appId, 'extractor', MODELS.extract, `${statementEv.label}: ${L.statement.length} days read`, { latency: [3600, 6200], tin: [1700, 1950], tout: [900, 1300] })
         }
         const final = store.update(appId, (a) => {
           a.status = 'extracted'
           const pages = new Set(a.entries.map((e) => e.evidence_id)).size
           setTrace(a, 'extractor', 'done', `Read ${a.entries.length} lines from ${pages} page${pages === 1 ? '' : 's'} · ${a.statement.length} days of ${POLICY[a.market].rail}`)
         })
+        record('agent.completed', appId, { agent: 'extractor', latency_ms: Date.now() - t0, detail: final.agent_trace[0].summary })
+        record('stage.completed', appId, { latency_ms: Date.now() - t0, detail: 'extract' })
         await sleep(300)
         emit({ type: 'agent', agent: 'extractor', status: 'done', summary: final.agent_trace[0].summary })
         emit({ type: 'done', application: final })
@@ -265,13 +290,18 @@ export function createMockApi(): BuktiApi {
         const checks = computeChecks(app, a)
         const metrics = computeMetrics(app, a)
 
+        const tStage = Date.now()
+        record('stage.started', appId, { detail: 'assess' })
         const runAgent = async (agent: AgentName, running: string, body: () => Promise<string>) => {
           if (!alive()) throw new Error('cancelled')
+          const ta = Date.now()
           store.update(appId, (x) => setTrace(x, agent, 'running', running))
+          record('agent.started', appId, { agent, detail: running })
           emit({ type: 'agent', agent, status: 'running', summary: running })
           await sleep(900)
           const done = await body()
           store.update(appId, (x) => setTrace(x, agent, 'done', done))
+          record('agent.completed', appId, { agent, latency_ms: Date.now() - ta, detail: done })
           emit({ type: 'agent', agent, status: 'done', summary: done })
           await sleep(350)
         }
@@ -294,6 +324,7 @@ export function createMockApi(): BuktiApi {
 
         try {
           await runAgent('reconciler', `Matching ${app.statement.length} notebook days against ${P.rail}`, async () => {
+            recordTool(appId, 'reconciler', 'reconcile_daily', `${app.statement.length} days · notebook vs ${P.rail}`, [12, 40])
             await emitChecks(by('reconciler'))
             store.update(appId, (x) => {
               x.metrics = metrics
@@ -302,10 +333,13 @@ export function createMockApi(): BuktiApi {
             return `${P.rail} covers ${pct(a.share)} of notebook sales · r = ${a.corr.toFixed(2)} · ${tally(by('reconciler'))}`
           })
           await runAgent('integrity', 'Testing for round numbers, repeats and closed-day sales', async () => {
+            recordTool(appId, 'integrity', 'forensic_tests', 'round numbers · repeated amounts · digit spread', [6, 24])
+            recordTool(appId, 'integrity', 'perceptual_hash', `${app.evidence.length} photos compared`, [30, 90])
             await emitChecks(by('integrity'))
             return `${by('integrity').length} forensic tests · ${tally(by('integrity'))}`
           })
           await runAgent('benchmark', `Comparing with similar ${P.shop}s`, async () => {
+            recordTool(appId, 'benchmark', 'bigquery.peer_benchmarks', `${P.shop}s · ${P.country} · peer band + median daily sales`, [480, 1150])
             await emitChecks(by('benchmark'))
             return a.peerRatio <= 1.8 ? 'In line with peers' : `${a.peerRatio.toFixed(1)}× the peer median`
           })
@@ -314,6 +348,7 @@ export function createMockApi(): BuktiApi {
           const memo = computeMemo(fresh, analyse(fresh), checks, lang, englishFacts(fresh))
           const afford = affordabilityCheck(fresh, a, memo)
           await runAgent('policy', 'Sizing the loan to weekly cash', async () => {
+            recordTool(appId, 'policy', 'shape_schedule', `${memo.tenor_weeks || 0} weekly installments · 30% cap per week`, [4, 18])
             await emitChecks([afford])
             if (!memo.amount) return 'No amount proposed — refer to the loan officer'
             const peak = Math.max(...memo.schedule.map((s) => s.amount))
@@ -321,6 +356,13 @@ export function createMockApi(): BuktiApi {
           })
           await runAgent('memo', 'Writing the credit memo', async () => {
             await sleep(3200)
+            recordModel(appId, 'memo', MODELS.memo, `Credit memo + borrower message in ${LANG_NAME[lang]}`, { latency: [11800, 15600], tin: [8800, 11200], tout: [900, 1400] })
+            if (memo.decision === 'refer' || memo.decision === 'decline')
+              record('guardrail.blocked', appId, {
+                agent: 'memo',
+                status: 'blocked',
+                detail: 'Borrower message drafted the word “fabricated” — blocked by the no-accusation rule and rewritten as a field-visit invitation',
+              })
             store.update(appId, (x) => {
               x.memo = memo
             })
@@ -334,6 +376,7 @@ export function createMockApi(): BuktiApi {
         const final = store.update(appId, (x) => {
           x.status = 'ready'
         })
+        record('stage.completed', appId, { latency_ms: Date.now() - tStage, detail: 'assess' })
         emit({ type: 'done', application: final })
       })
     },
@@ -347,10 +390,14 @@ export function createMockApi(): BuktiApi {
           action: body.action,
           amount: body.action === 'decline' ? 0 : body.amount ?? a.memo!.amount,
           note: body.note ?? '',
-          officer: a.market === 'ID' ? 'Putri Anggraini' : 'Kavitha Raman',
+          officer: mockUser?.name ?? 'Loan officer (demo)',
           ts: now(),
         }
         a.status = 'decided'
+        record('decision.made', appId, {
+          agent: 'officer',
+          detail: `${body.action.toUpperCase()}${body.action === 'decline' ? '' : ` ${money(a.decision.amount, a.market)}`} by ${a.decision.officer}${body.note ? ` — “${body.note}”` : ''}`,
+        })
       })
     },
 
@@ -360,6 +407,58 @@ export function createMockApi(): BuktiApi {
 
     async tts() {
       throw new ApiError(501, 'No TTS in mock mode')
+    },
+
+    // Auth: guest-only by default. `?mockauth` (or localStorage bukti.mockauth=1) turns on a fake
+    // Google sign-in so the signed-in UI can be exercised without Firebase.
+    async authConfig() {
+      const on = new URLSearchParams(location.search).has('mockauth') || localStorage.getItem('bukti.mockauth') === '1'
+      if (on) localStorage.setItem('bukti.mockauth', '1')
+      return { enabled: on }
+    },
+    async createSession() {
+      const prev = loadMockUser()
+      const t = now()
+      const user: User = {
+        uid: 'mock-officer-1',
+        email: 'putri.anggraini@koperasi.example',
+        name: 'Putri Anggraini',
+        photo_url: null,
+        role: 'officer',
+        created_at: prev?.created_at ?? t,
+        last_login_at: t,
+        login_count: (prev?.login_count ?? 0) + 1,
+      }
+      mockUser = user
+      localStorage.setItem('bukti.mock.user', JSON.stringify(user))
+      setEventUser(user.uid)
+      record('auth.login', null, { detail: `${user.name} signed in with Google` })
+      return user
+    },
+    async me() {
+      return mockUser
+    },
+    setTokenProvider(fn) {
+      if (!fn) {
+        mockUser = null
+        localStorage.removeItem('bukti.mock.user')
+        setEventUser(null)
+      }
+    },
+
+    copilot(appId, body, onEvent) {
+      const app = store.get(appId)
+      if (!app) {
+        onEvent({ type: 'error', message: 'Application not found' })
+        onEvent({ type: 'done' })
+        return () => {}
+      }
+      return mockCopilot(app, body.question, body.session_id, onEvent)
+    },
+
+    async listEvents(appId) {
+      await sleep(60)
+      return eventsFor(appId)
     },
 
     async openInterview(appId, lang, h: InterviewHandlers): Promise<InterviewConnection> {
@@ -373,20 +472,25 @@ export function createMockApi(): BuktiApi {
         a.facts = []
         setTrace(a, 'interviewer', 'running', `Live interview in ${LANG_NAME[lang]}`)
       })
+      const tIv = Date.now()
+      record('interview.started', appId, { agent: 'interviewer', model: MODELS.live, detail: `Live voice interview in ${LANG_NAME[lang]}` })
       let closed = false
       let ending = false
       let speaking: 'agent' | 'user' | null = null
       let muted = false
-      const phase = Math.random() * 10
+      const phase = randomFloat() * 10
       const facts: Fact[] = []
 
       const run = async () => {
         await sleep(700)
         h.onOpen?.()
-        for (let i = 0; i < script.length; i++) {
+        let i = 0
+        while (i < script.length) {
           if (closed) return
-          if (ending && i < script.length - 1) i = script.length - 1
-          const turn = script[i]
+          // "Selesai" pressed: jump straight to the closing turn
+          const idx = ending ? Math.max(i, script.length - 1) : i
+          i = idx + 1
+          const turn = script[idx]
           const text = turn.text[lang]
           const words = text.split(/\s+/)
           speaking = turn.role
@@ -419,6 +523,8 @@ export function createMockApi(): BuktiApi {
           a.status = a.status === 'extracted' || a.status === 'draft' ? 'interviewed' : a.status
           setTrace(a, 'interviewer', 'done', `${facts.length} facts captured in ${LANG_NAME[lang]}`)
         })
+        recordModel(appId, 'interviewer', MODELS.live, `${script.length} turns of live audio, ${facts.length} facts extracted`, { latency: [Date.now() - tIv, Date.now() - tIv], tin: [4200, 6400], tout: [1500, 2300] })
+        record('interview.completed', appId, { agent: 'interviewer', latency_ms: Date.now() - tIv, detail: `${facts.length} facts captured in ${LANG_NAME[lang]}` })
         h.onDone?.(facts)
       }
       void run()
@@ -426,7 +532,7 @@ export function createMockApi(): BuktiApi {
       const envelope = (t: number, strength: number) => {
         const syll = Math.max(0, Math.sin(t * 2 * Math.PI * 4.6 + phase)) ** 0.7
         const phrase = 0.55 + 0.45 * Math.sin(t * 2 * Math.PI * 0.8 + phase * 2)
-        return Math.min(1, (0.18 + 0.62 * syll * phrase + Math.random() * 0.08) * strength)
+        return Math.min(1, (0.18 + 0.62 * syll * phrase + randomFloat() * 0.08) * strength)
       }
       return {
         levels: () => {

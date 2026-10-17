@@ -55,8 +55,10 @@ export function parseISODate(iso: string): Date {
   return new Date(y, m - 1, d)
 }
 
-export function fmtDate(iso: string, lang: Lang, opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' }, market?: Market): string {
-  return new Intl.DateTimeFormat(locale(lang, market), opts).format(parseISODate(iso))
+const DAY_MONTH: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' }
+
+export function fmtDate(iso: string, lang: Lang, opts?: Intl.DateTimeFormatOptions, market?: Market): string {
+  return new Intl.DateTimeFormat(locale(lang, market), opts ?? DAY_MONTH).format(parseISODate(iso))
 }
 
 /** "1/9" — how dates sit in the notebook margin. */

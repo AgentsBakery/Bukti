@@ -233,6 +233,8 @@ export function EvidenceViewer({ app, viewEv, setViewEv }: { app: Application; v
         ref={port}
         className={`relative min-h-0 flex-1 overflow-hidden ${view.z > 1 ? 'cursor-grab active:cursor-grabbing' : ''}`}
         style={{ backgroundImage: 'radial-gradient(rgb(255 255 255 / 0.05) 1px, transparent 1px)', backgroundSize: '18px 18px', touchAction: 'none' }}
+        role="application"
+        aria-label="Evidence photo. Drag to pan, scroll or press plus and minus to zoom, 0 to fit."
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -304,9 +306,11 @@ export function EvidenceViewer({ app, viewEv, setViewEv }: { app: Application; v
             {daysHere.map((d) => {
               const on = linkedDates.has(d.date)
               return (
-                <div
+                <button
+                  type="button"
                   key={d.date}
-                  className="hl pointer-events-auto"
+                  aria-label={`${d.date}: ${d.transactions} transactions`}
+                  className="hl block cursor-pointer"
                   style={{
                     ...bboxStyle(d.bbox!, 1),
                     background: d.transactions === 0 ? 'var(--color-chili)' : undefined,
@@ -315,6 +319,8 @@ export function EvidenceViewer({ app, viewEv, setViewEv }: { app: Application; v
                   }}
                   onMouseEnter={() => hover([`day:${d.date}`], 'photo')}
                   onMouseLeave={() => hover(null)}
+                  onFocus={() => hover([`day:${d.date}`], 'photo')}
+                  onBlur={() => hover(null)}
                   onClick={() => !drag.current?.moved && pin([`day:${d.date}`], 'photo')}
                   title={`${d.date}: ${d.transactions} transactions`}
                 />

@@ -36,5 +36,5 @@ export function honorific(app: Application): string {
 export function makeT(app: Application, lang: Lang) {
   const rail = app.market === 'ID' ? 'QRIS' : 'UPI'
   const base = { h: honorific(app), rail, name: shortName(app.persona) }
-  return (key: StringKey, vars: Record<string, string | number> = {}) => translate(lang, key, { ...base, ...vars })
+  return (key: StringKey, vars?: Record<string, string | number>) => translate(lang, key, { ...base, ...vars })
 }

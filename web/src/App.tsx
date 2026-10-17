@@ -4,11 +4,13 @@ import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router'
 import { KawungLoader } from './components/Kawung'
 import { SvgDefs } from './components/SvgDefs'
 import { Tooltip } from 'radix-ui'
+import { AuthProvider } from './auth/AuthContext'
 
 const Landing = lazy(() => import('./landing/Landing'))
 const BorrowerApp = lazy(() => import('./borrower/BorrowerApp'))
 const ConsolePage = lazy(() => import('./console/ConsolePage'))
 const DemoPage = lazy(() => import('./demo/DemoPage'))
+const LoginPage = lazy(() => import('./auth/LoginPage'))
 
 function BorrowerRoute() {
   const { appId } = useParams()
@@ -34,10 +36,12 @@ export function App() {
     <MotionConfig reducedMotion="user">
       <Tooltip.Provider delayDuration={250}>
         <SvgDefs />
+        <AuthProvider>
         <BrowserRouter>
           <Suspense fallback={<Fallback />}>
             <Routes>
               <Route path="/" element={<Landing />} />
+              <Route path="/login" element={<LoginPage />} />
               <Route path="/apply/:appId" element={<BorrowerRoute />} />
               <Route path="/console" element={<ConsolePage />} />
               <Route path="/console/:appId" element={<ConsolePage />} />
@@ -46,6 +50,7 @@ export function App() {
             </Routes>
           </Suspense>
         </BrowserRouter>
+        </AuthProvider>
       </Tooltip.Provider>
     </MotionConfig>
   )

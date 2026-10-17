@@ -5,6 +5,7 @@ import { Link, useParams } from 'react-router'
 import { IS_MOCK } from '../api'
 import BorrowerApp from '../borrower/BorrowerApp'
 import { ConsoleView } from '../console/ConsoleView'
+import { UserChip } from '../auth/UserChip'
 import { Logo } from '../components/Logo'
 import { shortName } from '../lib/format'
 import { useTitle } from '../lib/hooks'
@@ -113,6 +114,7 @@ export default function DemoPage() {
           <Link to={`/console/${appId}`} target="_blank" className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-soot-2 hover:bg-paper-2 hover:text-ink">
             Full console <ExternalLink size={12} aria-hidden />
           </Link>
+          <UserChip />
         </div>
       </header>
       <div className="flex min-h-0 flex-1">

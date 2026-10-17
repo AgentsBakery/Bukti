@@ -148,6 +148,7 @@ export interface Application {
   memo: Memo | null
   agent_trace: AgentStep[]
   decision: Decision | null
+  owner_uid?: string | null
 }
 
 export interface ApplicationSummary {
@@ -197,3 +198,75 @@ export const AGENT_ORDER: AgentName[] = [
   'policy',
   'memo',
 ]
+
+// ---- Auth (optional Google sign-in) ----------------------------------------
+
+export interface FirebaseWebConfig {
+  apiKey: string
+  authDomain: string
+  projectId: string
+  appId: string
+}
+
+export interface AuthConfig {
+  enabled: boolean
+  firebase?: FirebaseWebConfig
+}
+
+export interface User {
+  uid: string
+  email: string
+  name: string
+  photo_url: string | null
+  role: 'officer'
+  created_at: string
+  last_login_at: string
+  login_count: number
+}
+
+// ---- Officer Copilot ---------------------------------------------------------
+
+export type CopilotEvent =
+  | { type: 'session'; session_id: string }
+  | { type: 'tool'; name: string; args: Record<string, unknown> }
+  | { type: 'highlight'; refs: string[]; note: string }
+  | { type: 'answer_delta'; text: string }
+  | { type: 'answer'; text: string; refs: string[] }
+  | { type: 'error'; message: string }
+  | { type: 'done' }
+
+// ---- Agent run log -------------------------------------------------------------
+
+export type RunEventType =
+  | 'auth.login'
+  | 'application.created'
+  | 'evidence.uploaded'
+  | 'stage.started'
+  | 'stage.completed'
+  | 'agent.started'
+  | 'agent.completed'
+  | 'model.call'
+  | 'tool.call'
+  | 'interview.started'
+  | 'interview.completed'
+  | 'copilot.question'
+  | 'decision.made'
+  | 'guardrail.blocked'
+
+/** Contract name: `Event`. Renamed here so it doesn't shadow the DOM's Event. */
+export interface RunEvent {
+  event_id: string
+  ts: string
+  type: RunEventType
+  app_id: string | null
+  user_id: string | null
+  agent: string | null
+  model: string | null
+  tool: string | null
+  latency_ms: number | null
+  input_tokens: number | null
+  output_tokens: number | null
+  cost_usd: number | null
+  status: 'ok' | 'error' | 'blocked'
+  detail: string
+}

@@ -8,8 +8,10 @@ import { KawungLoader } from '../components/Kawung'
 import { Logo } from '../components/Logo'
 import { fmtTime, initials, money } from '../lib/format'
 import { useTitle } from '../lib/hooks'
+import { businessName } from '../lib/text'
 import { usePoll } from '../lib/useApplication'
 import { ConsoleView, STATUS_LABEL } from './ConsoleView'
+import { UserChip } from '../auth/UserChip'
 
 function Queue({ items, current }: { items: ApplicationSummary[] | null; current?: string }) {
   return (
@@ -42,7 +44,7 @@ function Queue({ items, current }: { items: ApplicationSummary[] | null; current
                     <span className={`font-mono shrink-0 text-[10px] ${on ? 'text-paper/60' : 'text-soot-3'}`}>{fmtTime(a.created_at).slice(0, 5)}</span>
                   </span>
                   <span className={`block truncate text-[11.5px] ${on ? 'text-paper/70' : 'text-soot-2'}`}>
-                    {a.persona.business.replace(/\s*\(claimed\)/i, '')} · {a.persona.city}
+                    {businessName(a.persona)} · {a.persona.city}
                   </span>
                   <span className="mt-1 flex items-center justify-between gap-2 text-[11px] font-bold">
                     <span className="flex items-center gap-1.5 whitespace-nowrap">
@@ -107,6 +109,7 @@ export default function ConsolePage() {
           <Link to="/" className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-[13px] font-bold text-paper/80 hover:bg-white/10 hover:text-paper">
             <ArrowLeft size={15} aria-hidden /> Demo home
           </Link>
+          <UserChip tone="paper" />
         </div>
       </header>
       <main className="flex min-h-0 flex-1 flex-col p-3">

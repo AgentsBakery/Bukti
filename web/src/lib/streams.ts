@@ -17,7 +17,8 @@ interface Run {
 const runs = new Map<string, Run>()
 const key = (kind: StreamKind, appId: string) => `${kind}:${appId}`
 
-export function startStream(kind: StreamKind, appId: string, { force = false } = {}): Run {
+export function startStream(kind: StreamKind, appId: string, opts?: { force?: boolean }): Run {
+  const force = opts?.force ?? false
   const k = key(kind, appId)
   const existing = runs.get(k)
   if (existing && !existing.finished) return existing

@@ -1,12 +1,15 @@
-import { CircleHelp, FileText, NotebookPen, Receipt, Store } from 'lucide-react'
-import { Dialog } from 'radix-ui'
+import { CircleHelp, FileText, NotebookPen, Receipt, ScrollText, Sparkles, Store } from 'lucide-react'
+import { Dialog, Tabs } from 'radix-ui'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { api } from '../api'
 import type { Application, Health } from '../api/types'
 import { LedgerBook } from '../borrower/LedgerBook'
 import { Kawung, KawungLoader } from '../components/Kawung'
 import { centerIn } from '../lib/flight'
-import { useApplication } from '../lib/useApplication'
+import { businessName } from '../lib/text'
+import { useApplication, usePoll } from '../lib/useApplication'
+import { Copilot } from './Copilot'
+import { fmtCost, fmtDuration, fmtTokens, RunLog, totals } from './RunLog'
 import { AgentGraph } from './AgentGraph'
 import { AuditTrail, FactsPanel, ProofChain } from './CaseFile'
 import { DecisionPanel } from './DecisionPanel'
@@ -134,6 +137,8 @@ const SHORTCUTS: [string, string][] = [
   ['+ / − / 0', 'Zoom in / out / fit'],
   ['[ / ]', 'Previous / next application'],
   ['Esc', 'Clear the highlight'],
+  ['/', 'Ask the copilot about this case'],
+  ['L', 'Open the run log'],
   ['?', 'This help'],
 ]
 
@@ -167,6 +172,10 @@ export function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange
 function Body({ app, replace, compact, onPrevNext, help, setHelp, left }: { app: Application; replace: (a: Application) => void; compact: boolean; onPrevNext?: (d: -1 | 1) => void; help: boolean; setHelp: (b: boolean) => void; left?: ReactNode }) {
   const models = useModels()
   const { clear } = useLink()
+  const [tab, setTab] = useState<'case' | 'ask'>('case')
+  const [logOpen, setLogOpen] = useState(false)
+  const events = usePoll(() => api.listEvents(app.id), 2000, [app.id]) ?? []
+  const tot = totals(events)
   const [viewEv, setViewEv] = useState<string | null>(app.evidence[0]?.id ?? null)
   useEffect(() => {
     if (!viewEv && app.evidence[0]) setViewEv(app.evidence[0].id)
@@ -182,7 +191,12 @@ function Body({ app, replace, compact, onPrevNext, help, setHelp, left }: { app:
       if (k === '?') {
         e.preventDefault()
         setHelp(true)
-      } else if (k === 'Escape') clear()
+      } else if (k === '/') {
+        e.preventDefault()
+        setTab('ask')
+        window.setTimeout(() => document.getElementById('copilot-input')?.focus(), 30)
+      } else if (k === 'l' || k === 'L') setLogOpen(true)
+      else if (k === 'Escape') clear()
       else if (k === 'a' || k === 'A') window.dispatchEvent(new CustomEvent('bukti:decide', { detail: 'approve' }))
       else if (k === 'j' || k === 'J') window.dispatchEvent(new CustomEvent('bukti:decide', { detail: 'adjust' }))
       else if (k === 'd' || k === 'D') window.dispatchEvent(new CustomEvent('bukti:decide', { detail: 'decline' }))
@@ -212,7 +226,25 @@ function Body({ app, replace, compact, onPrevNext, help, setHelp, left }: { app:
       ) : null}
       {/* centre: pipeline · photo + ledger · metrics */}
       <div className="flex min-h-0 min-w-0 flex-col gap-3">
-        <section className="paper-card shrink-0 px-3 pb-2.5 pt-3" aria-label="Agent pipeline">
+        <section className="paper-card shrink-0 px-3 pb-2.5 pt-2" aria-label="Agent pipeline">
+          <div className="mb-1.5 flex items-center justify-between gap-2 pl-1">
+            <span className="eyebrow !text-[10.5px]">Agent pipeline</span>
+            <button
+              type="button"
+              onClick={() => setLogOpen(true)}
+              className="group flex items-center gap-2.5 rounded-lg px-2 py-1 text-[11.5px] font-bold text-soot-2 transition-colors hover:bg-paper-2 hover:text-ink"
+              aria-keyshortcuts="L"
+            >
+              {events.length ? (
+                <span className="font-mono tnum hidden xl:inline">
+                  {tot.modelCalls} model calls · {fmtTokens(tot.tokensIn + tot.tokensOut)} tokens · {fmtCost(tot.cost)} · {fmtDuration(tot.wallMs)}
+                </span>
+              ) : null}
+              <span className="flex items-center gap-1 rounded-md border border-ink/25 px-1.5 py-0.5 text-ink group-hover:border-ink">
+                <ScrollText size={13} aria-hidden /> Run log
+              </span>
+            </button>
+          </div>
           <AgentGraph app={app} models={models} />
         </section>
         <div className={`grid min-h-0 flex-1 gap-3 ${compact ? 'grid-cols-[minmax(0,1.15fr)_minmax(270px,0.85fr)]' : 'grid-cols-[minmax(0,1.2fr)_minmax(300px,0.8fr)]'}`}>
@@ -225,18 +257,40 @@ function Body({ app, replace, compact, onPrevNext, help, setHelp, left }: { app:
       </div>
       {/* right: the case file + decision */}
       <div className="flex min-h-0 min-w-0 flex-col gap-3">
-        <div data-scroll className="thin-scroll min-h-0 flex-1 space-y-5 overflow-y-auto rounded-[16px] pr-1">
-          <MemoPanel app={app} />
-          <ProofChain app={app} />
-          <FactsPanel app={app} />
-          <AuditTrail app={app} />
-          <div className="h-2" />
-        </div>
+        <Tabs.Root value={tab} onValueChange={(v) => setTab(v as 'case' | 'ask')} className="flex min-h-0 flex-1 flex-col gap-2">
+          <Tabs.List className="grid shrink-0 grid-cols-2 gap-1 rounded-xl bg-paper/70 p-1 shadow-sm ring-1 ring-soot/10" aria-label="Case file or copilot">
+            <Tabs.Trigger
+              value="case"
+              className="flex h-9 items-center justify-center gap-1.5 rounded-lg text-[13px] font-extrabold text-soot-2 transition-colors data-[state=active]:bg-ink data-[state=active]:text-paper"
+            >
+              <FileText size={14} aria-hidden /> Case file
+            </Tabs.Trigger>
+            <Tabs.Trigger
+              value="ask"
+              className="flex h-9 items-center justify-center gap-1.5 rounded-lg text-[13px] font-extrabold text-soot-2 transition-colors data-[state=active]:bg-ink data-[state=active]:text-paper"
+            >
+              <Sparkles size={14} aria-hidden /> Ask about this case <kbd className="font-mono text-[10px] opacity-60">/</kbd>
+            </Tabs.Trigger>
+          </Tabs.List>
+          <Tabs.Content value="case" forceMount className="min-h-0 flex-1 data-[state=inactive]:hidden">
+            <div data-scroll className="thin-scroll h-full space-y-5 overflow-y-auto rounded-[16px] pr-1">
+              <MemoPanel app={app} />
+              <ProofChain app={app} />
+              <FactsPanel app={app} />
+              <AuditTrail app={app} />
+              <div className="h-2" />
+            </div>
+          </Tabs.Content>
+          <Tabs.Content value="ask" forceMount className="min-h-0 flex-1 data-[state=inactive]:hidden">
+            <Copilot app={app} model={[...events].reverse().find((e) => e.agent === 'copilot' && e.type === 'model.call')?.model ?? models?.copilot} />
+          </Tabs.Content>
+        </Tabs.Root>
         <div className="shrink-0">
           <DecisionPanel app={app} onDecided={replace} />
         </div>
       </div>
       <HelpDialog open={help} onOpenChange={setHelp} />
+      <RunLog events={events} open={logOpen} onOpenChange={setLogOpen} title={app.persona.name} />
     </div>
   )
 }
@@ -258,7 +312,7 @@ export function ConsoleView({ appId, compact = false, onPrevNext, left }: { appI
           <div className="flex min-w-0 items-baseline gap-3">
             <h1 className="font-display truncate text-[24px] leading-none text-ink">{app.persona.name}</h1>
             <span className="truncate text-[13px] font-bold text-soot">
-              {app.persona.business.replace(/\s*\(claimed\)/i, '')} · {app.persona.city} · {app.market === 'ID' ? 'Indonesia' : 'India'} · {app.language === 'ta' ? 'Tamil' : app.language === 'id' ? 'Bahasa' : 'English'}
+              {businessName(app.persona)} · {app.persona.city} · {app.market === 'ID' ? 'Indonesia' : 'India'} · {app.language === 'ta' ? 'Tamil' : app.language === 'id' ? 'Bahasa' : 'English'}
             </span>
             <StatusPill status={app.status} />
           </div>
