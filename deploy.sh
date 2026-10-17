@@ -26,6 +26,11 @@ for role in roles/aiplatform.user roles/datastore.user roles/bigquery.jobUser ro
   gc projects add-iam-policy-binding "$PROJECT" --member "serviceAccount:$SA" --role "$role" --condition=None >/dev/null
 done
 
+echo "==> Cloud Build service account (source deploys build as the default compute SA)"
+PROJECT_NUMBER=$(gc projects describe "$PROJECT" --format 'value(projectNumber)')
+gc projects add-iam-policy-binding "$PROJECT" --member "serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+  --role roles/cloudbuild.builds.builder --condition=None >/dev/null
+
 echo "==> Firestore (native mode)"
 gc firestore databases describe --database='(default)' >/dev/null 2>&1 || gc firestore databases create --location="$REGION" --type=firestore-native
 
@@ -45,7 +50,7 @@ if [[ "${1:-}" == "infra" ]]; then echo "==> Infra ready (skipping Cloud Run dep
 
 echo "==> Cloud Run"
 gc run deploy "$SERVICE" --source . --region "$REGION" --service-account "$SA" \
-  --allow-unauthenticated --min-instances 1 --max-instances 1 --cpu 2 --memory 2Gi \
+  --no-invoker-iam-check --min-instances 1 --max-instances 1 --cpu 2 --memory 2Gi \
   --concurrency 60 --timeout 900 --session-affinity --no-cpu-throttling \
   --set-env-vars "GOOGLE_CLOUD_PROJECT=$PROJECT,BUKTI_BUCKET=$BUCKET,BUKTI_FIRESTORE=1,BUKTI_BIGQUERY=1,BUKTI_BQ_DATASET=$DATASET,BUKTI_LIVE_LOCATION=$LIVE_LOCATION"
 

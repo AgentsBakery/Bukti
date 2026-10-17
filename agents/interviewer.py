@@ -28,6 +28,7 @@ from app.store import new_id, store
 
 log = logging.getLogger("bukti.interviewer")
 MAX_SECONDS = 300
+FIRST_EVENT_TIMEOUT_S = 15
 LANG_NAMES = {"id": "Bahasa Indonesia", "ta": "Tamil", "en": "English"}
 LANG_CODES = {"id": "id-ID", "ta": "ta-IN", "en": "en-US"}
 
@@ -141,15 +142,16 @@ async def run_interview(ws: WebSocket, app: Application, lang: str) -> None:
 
     runner = Runner(app_name=APP_NAME, agent=build_interviewer(app, lang), session_service=sessions)
     session = await sessions.create_session(app_name=APP_NAME, user_id=app_id, state={"app_id": app_id})
-    live = LiveRequestQueue()
+    holder = {"q": LiveRequestQueue()}
     run_config = RunConfig(
         response_modalities=["AUDIO"],
         speech_config=types.SpeechConfig(language_code=LANG_CODES[lang]),
         input_audio_transcription=types.AudioTranscriptionConfig(),
         output_audio_transcription=types.AudioTranscriptionConfig(),
     )
-    live.send_content(types.Content(role="user", parts=[types.Part(
-        text="[The borrower has opened the interview screen and is listening. Greet them and begin.]")]))
+    kickoff = types.Content(role="user", parts=[types.Part(
+        text="[The borrower has opened the interview screen and is listening. Greet them and begin.]")])
+    holder["q"].send_content(kickoff)
 
     async def send_json(payload: dict) -> None:
         with contextlib.suppress(Exception):
@@ -162,7 +164,7 @@ async def run_interview(ws: WebSocket, app: Application, lang: str) -> None:
                 if msg.get("type") == "websocket.disconnect":
                     break
                 if msg.get("bytes"):
-                    live.send_realtime(types.Blob(data=msg["bytes"], mime_type="audio/pcm;rate=16000"))
+                    holder["q"].send_realtime(types.Blob(data=msg["bytes"], mime_type="audio/pcm;rate=16000"))
                 elif msg.get("text"):
                     data = json.loads(msg["text"])
                     if data.get("type") == "end":
@@ -175,9 +177,29 @@ async def run_interview(ws: WebSocket, app: Application, lang: str) -> None:
             fact = await queue.get()
             await send_json({"type": "fact", "fact": fact.model_dump()})
 
+    async def events():
+        """Live events, reconnecting once if the model hasn't spoken within FIRST_EVENT_TIMEOUT_S."""
+        for attempt in range(2):
+            gen = runner.run_live(user_id=app_id, session_id=session.id, live_request_queue=holder["q"],
+                                  run_config=run_config)
+            try:
+                first = await asyncio.wait_for(anext(gen), timeout=FIRST_EVENT_TIMEOUT_S)
+            except (asyncio.TimeoutError, StopAsyncIteration):
+                log.warning("live session silent; reconnecting", extra={"app_id": app_id, "attempt": attempt + 1})
+                with contextlib.suppress(Exception):
+                    await gen.aclose()
+                holder["q"].close()
+                holder["q"] = LiveRequestQueue()
+                holder["q"].send_content(kickoff)
+                continue
+            yield first
+            async for ev in gen:
+                yield ev
+            return
+        raise RuntimeError("live model did not respond")
+
     async def downstream() -> None:
-        async for event in runner.run_live(user_id=app_id, session_id=session.id, live_request_queue=live,
-                                           run_config=run_config):
+        async for event in events():
             if event.interrupted:
                 await send_json({"type": "interrupted"})
             if event.input_transcription and event.input_transcription.text:
@@ -202,7 +224,7 @@ async def run_interview(ws: WebSocket, app: Application, lang: str) -> None:
             if t.exception():
                 error = t.exception()
     finally:
-        live.close()
+        holder["q"].close()
         for t in tasks:
             t.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)

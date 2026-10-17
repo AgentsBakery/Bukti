@@ -29,6 +29,7 @@ from app.store import store
 
 log = logging.getLogger("bukti.assess")
 MEMO_TIMEOUT_S = 120
+_BENCH_CACHE: dict[str, tuple] = {}  # benchmarks change rarely; one BigQuery read per market per instance
 
 
 @asynccontextmanager
@@ -87,7 +88,9 @@ class BenchmarkAgent(StepAgent):
         app = await store.get(app_id)
         m = analysis.MARKET[app.market]
         band, median, source = m["default_share_band"], m["peer_median_daily_sales"], "built-in defaults"
-        if settings.use_bigquery:
+        if app.market in _BENCH_CACHE:
+            band, median, source = _BENCH_CACHE[app.market]
+        elif settings.use_bigquery:
             try:
                 from google.cloud import bigquery
 
@@ -101,6 +104,7 @@ class BenchmarkAgent(StepAgent):
                     r = rows[0]
                     band, median = (float(r["share_p25"]), float(r["share_p75"])), int(r["median_daily_sales"])
                     source = f"BigQuery peer_benchmarks ({r['n_shops']} shops)"
+                    _BENCH_CACHE[app.market] = (band, median, source)
             except Exception:  # noqa: BLE001
                 log.exception("bigquery benchmark failed; using defaults")
         ctx.session.state["share_band"] = list(band)

@@ -28,6 +28,7 @@ from app.store import new_id, store
 log = logging.getLogger("bukti.extractor")
 PROMPT_VERSION = "ledger-v3"
 CALL_TIMEOUT_S = 60
+HEDGE_AFTER_S = 22
 
 
 def _mime(data: bytes) -> str:
@@ -118,18 +119,28 @@ async def _generate(prompt: str, image: bytes, schema: type[BaseModel]) -> BaseM
         media_resolution=types.MediaResolution.MEDIA_RESOLUTION_HIGH,
         thinking_config=types.ThinkingConfig(thinking_level="low"),
     )
+    async def call():
+        resp = await client().aio.models.generate_content(
+            model=settings.model_extract,
+            contents=[types.Part.from_bytes(data=image, mime_type=_mime(image)), prompt],
+            config=cfg,
+        )
+        return resp.parsed if resp.parsed is not None else schema.model_validate_json(resp.text)
+
     last: Exception | None = None
     for attempt in range(3):
         try:
-            # A single slow call must not stall the demo: cap each attempt and retry.
-            resp = await asyncio.wait_for(client().aio.models.generate_content(
-                model=settings.model_extract,
-                contents=[types.Part.from_bytes(data=image, mime_type=_mime(image)), prompt],
-                config=cfg,
-            ), timeout=CALL_TIMEOUT_S)
-            if resp.parsed is not None:
-                return resp.parsed
-            return schema.model_validate_json(resp.text)
+            # Hedged request: if the first call is slow, race a second one and keep whichever lands first.
+            first = asyncio.ensure_future(call())
+            done, _ = await asyncio.wait({first}, timeout=HEDGE_AFTER_S)
+            racers = {first} if done else {first, asyncio.ensure_future(call())}
+            done, pending = await asyncio.wait(racers, timeout=CALL_TIMEOUT_S, return_when=asyncio.FIRST_COMPLETED)
+            for t in pending:
+                t.cancel()
+            winners = [t for t in done if not t.exception()]
+            if winners:
+                return winners[0].result()
+            raise next(iter(done)).exception() if done else asyncio.TimeoutError()
         except (Exception, asyncio.TimeoutError) as exc:  # noqa: BLE001 - retried, then surfaced as an agent error
             last = exc
             log.warning("extract attempt failed", extra={"attempt": attempt + 1, "error": str(exc)[:300]})

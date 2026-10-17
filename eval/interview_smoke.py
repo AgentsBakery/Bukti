@@ -84,6 +84,8 @@ async def main() -> None:
 
         async def pump_silence_until_quiet(seconds: float) -> None:
             for _ in range(int(seconds * 10)):
+                if read_task.done():
+                    return
                 await ws.send(silence)
                 await asyncio.sleep(0.1)
 
@@ -91,6 +93,8 @@ async def main() -> None:
         await pump_silence_until_quiet(9)
         for clip in clips:
             for i in range(0, len(clip), 3200):
+                if read_task.done():
+                    break
                 await ws.send(clip[i:i + 3200])
                 await asyncio.sleep(0.1)
             await pump_silence_until_quiet(9)
