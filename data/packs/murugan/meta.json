@@ -1,0 +1,15 @@
+{
+  "id": "murugan",
+  "label": "genuine",
+  "persona": "Murugan Selvaraj",
+  "business": "Kirana store",
+  "city": "Madurai",
+  "market": "IN",
+  "language": "Tamil",
+  "currency": "₹",
+  "rail": "UPI",
+  "hero": true,
+  "note": "Second-market hero. UPI-heavy.",
+  "period_start": "2026-09-01",
+  "days": 28
+}

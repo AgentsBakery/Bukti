@@ -1,0 +1,15 @@
+{
+  "id": "joko",
+  "label": "genuine",
+  "persona": "Pak Joko Santoso",
+  "business": "Kios kelontong",
+  "city": "Klaten",
+  "market": "ID",
+  "language": "Bahasa Indonesia",
+  "currency": "Rp",
+  "rail": "QRIS",
+  "hero": false,
+  "note": "",
+  "period_start": "2026-09-01",
+  "days": 28
+}

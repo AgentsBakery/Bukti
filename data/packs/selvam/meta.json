@@ -1,0 +1,15 @@
+{
+  "id": "selvam",
+  "label": "inflated",
+  "persona": "Selvam Pandian",
+  "business": "Provision store",
+  "city": "Tiruchirappalli",
+  "market": "IN",
+  "language": "Tamil",
+  "currency": "₹",
+  "rail": "UPI",
+  "hero": false,
+  "note": "Owner exaggerates: notebook sales are about 2.2x the real business.",
+  "period_start": "2026-09-01",
+  "days": 28
+}

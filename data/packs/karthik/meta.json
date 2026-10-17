@@ -1,0 +1,15 @@
+{
+  "id": "karthik",
+  "label": "fabricated",
+  "persona": "Karthik Raman",
+  "business": "Store (claimed)",
+  "city": "Salem",
+  "market": "IN",
+  "language": "Tamil",
+  "currency": "₹",
+  "rail": "UPI",
+  "hero": false,
+  "note": "Fake ledger: round, too-regular numbers, sales on days UPI shows no activity.",
+  "period_start": "2026-09-01",
+  "days": 28
+}

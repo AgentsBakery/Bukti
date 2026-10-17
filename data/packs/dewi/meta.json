@@ -1,0 +1,15 @@
+{
+  "id": "dewi",
+  "label": "inflated",
+  "persona": "Ibu Dewi Lestari",
+  "business": "Warung makan",
+  "city": "Sleman",
+  "market": "ID",
+  "language": "Bahasa Indonesia",
+  "currency": "Rp",
+  "rail": "QRIS",
+  "hero": false,
+  "note": "Owner exaggerates: notebook sales are about 2.4x the real business.",
+  "period_start": "2026-09-01",
+  "days": 28
+}

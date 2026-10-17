@@ -1,0 +1,15 @@
+{
+  "id": "rina",
+  "label": "fabricated",
+  "persona": "Ibu Rina Kartika",
+  "business": "Warung (claimed)",
+  "city": "Bantul",
+  "market": "ID",
+  "language": "Bahasa Indonesia",
+  "currency": "Rp",
+  "rail": "QRIS",
+  "hero": false,
+  "note": "Fake ledger written in one sitting: round, too-regular numbers, sales on days QRIS shows the shop closed.",
+  "period_start": "2026-09-01",
+  "days": 28
+}

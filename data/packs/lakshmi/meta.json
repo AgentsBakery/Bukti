@@ -1,0 +1,15 @@
+{
+  "id": "lakshmi",
+  "label": "genuine",
+  "persona": "Lakshmi Narayanan",
+  "business": "Tiffin & provisions",
+  "city": "Coimbatore",
+  "market": "IN",
+  "language": "Tamil",
+  "currency": "₹",
+  "rail": "UPI",
+  "hero": false,
+  "note": "",
+  "period_start": "2026-09-01",
+  "days": 28
+}

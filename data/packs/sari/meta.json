@@ -1,0 +1,15 @@
+{
+  "id": "sari",
+  "label": "genuine",
+  "persona": "Ibu Sari Wulandari",
+  "business": "Warung sembako",
+  "city": "Yogyakarta",
+  "market": "ID",
+  "language": "Bahasa Indonesia",
+  "currency": "Rp",
+  "rail": "QRIS",
+  "hero": true,
+  "note": "Hero demo. Sales dip mid-month (payday cycle).",
+  "period_start": "2026-09-01",
+  "days": 28
+}
