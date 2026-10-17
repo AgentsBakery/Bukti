@@ -390,7 +390,8 @@ async def interview(ws: WebSocket, app_id: str, lang: str = "id"):
 
 # ---------- Web app ----------
 
-@app.get("/{path:path}", include_in_schema=False)
+# HEAD too: link checkers (and the deploy smoke test) probe the page with HEAD, which GET-only routes reject with 405.
+@app.api_route("/{path:path}", methods=["GET", "HEAD"], include_in_schema=False)
 async def spa(path: str):
     if path.startswith(("api/", "ws/")):
         raise HTTPException(404)

@@ -31,6 +31,14 @@ def test_health_and_security_headers(client):
     assert "microphone=(self)" in r.headers["permissions-policy"]
 
 
+def test_pages_answer_head_requests(client):
+    # Link checkers probe with HEAD; a 405 would make the live demo look broken.
+    for path in ("/", "/login", "/console"):
+        r = client.head(path)
+        assert r.status_code == 200, path
+        assert "content-security-policy" in r.headers
+
+
 def test_api_docs_are_not_exposed(client):
     assert client.get("/docs").status_code in (200, 404)  # SPA fallback, never Swagger
     assert "swagger" not in client.get("/docs").text.lower()
