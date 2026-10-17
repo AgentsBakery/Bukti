@@ -29,6 +29,7 @@ log = logging.getLogger("bukti.extractor")
 PROMPT_VERSION = "ledger-v4"
 CALL_TIMEOUT_S = 60
 HEDGE_AFTER_S = 22
+MIN_SCAN_S = 3.0
 
 
 def _mime(data: bytes) -> str:
@@ -246,9 +247,14 @@ class ExtractorAgent(BaseAgent):
         page_tasks = {asyncio.ensure_future(read_ledger(app, ev, period)): ev for ev in ledgers}
         for ev in ledgers:
             yield sse(self.name, ctx, {"type": "evidence_scan", "evidence_id": ev.id})
+        scan_started = asyncio.get_running_loop().time()
         for fut in asyncio.as_completed(list(page_tasks)):
             try:
                 page_entries = await fut
+                # Cached reads return instantly; keep the on-screen "reading" moment legible.
+                remaining = MIN_SCAN_S - (asyncio.get_running_loop().time() - scan_started)
+                if remaining > 0:
+                    await asyncio.sleep(remaining)
             except Exception as exc:  # noqa: BLE001
                 errors.append(str(exc)[:200])
                 continue
