@@ -1,0 +1,5 @@
+market,sector,region,median_daily_sales,share_p25,share_p75,n_shops,source
+ID,warung_sembako,DI Yogyakarta,450000,0.25,0.55,412,synthetic peer panel (illustrative)
+ID,warung_makan,DI Yogyakarta,520000,0.22,0.50,188,synthetic peer panel (illustrative)
+IN,kirana,Tamil Nadu,5000,0.45,0.75,365,synthetic peer panel (illustrative)
+IN,tiffin_provisions,Tamil Nadu,4200,0.40,0.70,140,synthetic peer panel (illustrative)

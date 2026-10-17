@@ -48,6 +48,7 @@ class Evidence(BaseModel):
     height: int
     sha256: str = ""
     ahash: str = ""
+    src: str = ""  # where the bytes live: "pack:<relative path>" or "upload:<evidence id>"
 
 
 class Entry(BaseModel):

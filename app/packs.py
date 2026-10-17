@@ -71,7 +71,8 @@ async def load_pack(pack_id: str) -> Application:
         ev_id = new_id("ev")
         w, h, sha, ahash = image_fingerprint(path.read_bytes())
         app.evidence.append(Evidence(id=ev_id, type=etype, label=label, url=f"/api/evidence/{ev_id}/image",
-                                     width=w, height=h, sha256=sha, ahash=ahash))
+                                     width=w, height=h, sha256=sha, ahash=ahash,
+                                     src=f"pack:{path.relative_to(settings.data_dir).as_posix()}"))
         store.add_image(ev_id, path)
     await store.save(app)
     return app

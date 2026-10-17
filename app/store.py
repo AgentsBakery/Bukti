@@ -109,6 +109,14 @@ class Store:
         path = self._images.get(evidence_id)
         if path and path.exists():
             return path
+        # After a restart the in-memory map is empty; resolve from the evidence record instead.
+        for app in self._apps.values():
+            for ev in app.evidence:
+                if ev.id == evidence_id and ev.src.startswith("pack:"):
+                    candidate = (settings.data_dir / ev.src[5:]).resolve()
+                    if settings.data_dir.resolve() in candidate.parents and candidate.exists():
+                        self._images[evidence_id] = candidate
+                        return candidate
         local = settings.cache_dir / "uploads" / f"{evidence_id}.jpg"
         if local.exists():
             return local
@@ -141,7 +149,7 @@ class Store:
         label = {"ledger": f"Ledger page {count}", "statement": "Payment statement",
                  "receipt": f"Receipt {count}", "shop": "Shop photo"}[etype]
         ev = Evidence(id=ev_id, type=etype, label=label, url=f"/api/evidence/{ev_id}/image",
-                      width=w, height=h, sha256=sha, ahash=ahash)
+                      width=w, height=h, sha256=sha, ahash=ahash, src=f"upload:{ev_id}")
         self._images[ev_id] = local
         app.evidence.append(ev)
         await self.save(app)
