@@ -61,7 +61,7 @@ function plan(app: Application, question: string): Plan {
     const s1 = avg(stmtBy(0).map((d) => d.total))
     const s2 = avg(stmtBy(1).map((d) => d.total))
     const why = fact('slow_period_reason')
-    const dates = w2.map((e) => e.date).sort()
+    const dates = w2.map((e) => e.date).sort((a, b) => a.localeCompare(b))
     const span = dates.length ? `${Number(dates[0].slice(8))}–${Number(dates[dates.length - 1].slice(8))} ${fmtDate(dates[0], 'en', { month: 'short' })}` : 'week 2'
     const real = Math.abs(pctOf(l2, l1) - pctOf(s2, s1)) < 20
     return {

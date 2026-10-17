@@ -37,7 +37,9 @@ guest access only.
 - URL: `https://bukti-sonarqube-lgmfuzrnzq-as.a.run.app` (scales to zero; first load takes ~2 minutes).
 - Admin password: `gcloud secrets versions access latest --secret sonar-admin-password`.
 - Re-deploy / rotate CI token: `./infra/sonarqube/deploy-sonarqube.sh`.
-- Quality gate "Bukti": new code must keep reliability, security and maintainability at A.
+- Quality gate "Bukti" (new code): zero new issues, reliability/security/maintainability A, all security hotspots
+  reviewed, duplication ≤ 3%. No coverage condition yet (the web app has no unit-test suite; add one before
+  re-enabling coverage).
 - Turn it off: `gcloud sql instances patch bukti-sonar-db --activation-policy NEVER` and delete the
   `SONAR_HOST_URL` repository variable (the CI job then skips).
 

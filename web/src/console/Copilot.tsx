@@ -113,14 +113,36 @@ function InlineRef({ app, refs }: { app: Application; refs: string[] }) {
   )
 }
 
+/** Split text into plain, **bold** and [ref] segments by scanning — no regex, so no backtracking. */
+function segments(text: string): string[] {
+  const out: string[] = []
+  let buf = ''
+  let i = 0
+  while (i < text.length) {
+    const close = text.startsWith('**', i) ? text.indexOf('**', i + 2) : text[i] === '[' ? text.indexOf(']', i + 1) : -1
+    if (close > i + 1) {
+      const end = text.startsWith('**', i) ? close + 2 : close + 1
+      if (buf) out.push(buf)
+      out.push(text.slice(i, end))
+      buf = ''
+      i = end
+      continue
+    }
+    buf += text[i]
+    i += 1
+  }
+  if (buf) out.push(buf)
+  return out
+}
+
 function Inline({ app, text }: { app: Application; text: string }) {
-  const parts = text.split(/(\*\*[^*]+\*\*|\[[^\]]+\])/g)
+  const parts = segments(text)
   return (
     <>
       {parts.map((p, i) => {
         if (p.startsWith('**') && p.endsWith('**') && p.length > 4) return <strong key={i} className="font-extrabold text-soot">{p.slice(2, -2)}</strong>
         if (p.startsWith('[') && p.endsWith(']')) {
-          const refs = p.slice(1, -1).split(/\s*,\s*/).filter((r) => REF.test(r))
+          const refs = p.slice(1, -1).split(',').map((r) => r.trim()).filter((r) => REF.test(r))
           if (refs.length) return <InlineRef key={i} app={app} refs={refs} />
         }
         return <span key={i}>{p}</span>
