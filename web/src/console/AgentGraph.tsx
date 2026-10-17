@@ -1,4 +1,4 @@
-import { BookOpenCheck, Calculator, FileSignature, GitCompareArrows, Mic, ScanText, Users } from 'lucide-react'
+import { BookOpenCheck, Calculator, FileSignature, GitCompareArrows, MessageSquareText, Mic, ScanText, Users } from 'lucide-react'
 import { motion } from 'motion/react'
 import { AGENT_ORDER, type AgentName, type AgentStep, type Application } from '../api/types'
 import { useNow } from '../lib/hooks'
@@ -6,6 +6,7 @@ import { useNow } from '../lib/hooks'
 const META: Record<AgentName, { label: string; Icon: typeof ScanText; model?: 'extract' | 'live' | 'memo' }> = {
   extractor: { label: 'Extractor', Icon: ScanText, model: 'extract' },
   interviewer: { label: 'Interviewer', Icon: Mic, model: 'live' },
+  verifier: { label: 'Verifier', Icon: MessageSquareText, model: 'extract' },
   reconciler: { label: 'Reconciler', Icon: GitCompareArrows },
   integrity: { label: 'Integrity', Icon: BookOpenCheck },
   benchmark: { label: 'Benchmark', Icon: Users },

@@ -11,6 +11,9 @@ audited financial statements, payslips or bureau history.
 1.2 Evidence accepted: handwritten cash notebooks, digital payment statements (QRIS in Indonesia, UPI in
 India), supplier receipts, photos of the shop, and a short interview with the owner.
 
+1.3 Loans fund productive business use only: stock and inventory, equipment, renovation, expansion or working
+capital. A stated non-business purpose (celebrations, gambling, personal consumption) is declined with coaching.
+
 ## 2. Verifying sales
 
 2.1 Notebook sales are the starting point. They are verified against the digital payment statement for the
@@ -50,7 +53,11 @@ weeks (around paydays), smaller in weak weeks. The total repaid is unchanged.
 5.2 Two or more integrity failures require human review before any offer is made. The system recommends
 "refer"; only a loan officer can decline.
 
-5.3 No decision may use gender, religion, ethnicity, marital status or age. The interview never asks about them.
+5.3 Interview answers that contradict the evidence (for example a stated daily turnover far from the notebook, or a
+business age shorter than the notebook's own records), or two or more unanswered key questions, require human
+review. The interviewer re-asks an evasive answer once before recording it as unanswered.
+
+5.4 No decision may use gender, religion, ethnicity, marital status or age. The interview never asks about them.
 
 ## 6. Regulatory references (summaries; check the source text)
 

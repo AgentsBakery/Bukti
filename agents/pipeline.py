@@ -1,7 +1,7 @@
 """ADK orchestration. Two stages, each its own root agent:
 
   extract  = ExtractorAgent                                   (before the interview, so it can ask about the notebook)
-  assess   = Sequential[ Benchmark → Parallel[Reconciler, Integrity] → Policy → Memo(Gemini writer) ]
+  assess   = Sequential[ Benchmark → Parallel[Reconciler, Integrity, Interview verifier] → Policy → Memo(Gemini writer) ]
 """
 
 from __future__ import annotations
@@ -14,8 +14,8 @@ from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
 
-from agents.assess import (BenchmarkAgent, IntegrityAgent, MemoAgent, PolicyAgent, ReconcilerAgent,
-                           build_memo_writer)
+from agents.assess import (BenchmarkAgent, IntegrityAgent, InterviewVerifierAgent, MemoAgent, PolicyAgent,
+                           ReconcilerAgent, build_memo_writer)
 from agents.extractor import ExtractorAgent
 from agents.observability import ObservabilityPlugin
 
@@ -38,6 +38,7 @@ def build_assess_stage() -> SequentialAgent:
             ParallelAgent(name="verify", description="Independent verification", sub_agents=[
                 ReconcilerAgent(name="reconciler", description="Notebook vs payment-rail reconciliation"),
                 IntegrityAgent(name="integrity", description="Fabrication signals"),
+                InterviewVerifierAgent(name="verifier", description="Interview answers vs evidence and loan purpose"),
             ]),
             PolicyAgent(name="policy", description="Affordability and cash-flow-shaped repayment"),
             MemoAgent(name="memo", description="Explains the decision", sub_agents=[build_memo_writer()]),

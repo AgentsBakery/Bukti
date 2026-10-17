@@ -217,9 +217,14 @@ def size_loan(market: str, stats: dict, checks: list[Check], purchases_total: in
     weekly_net = net_monthly * 12 / 52
     max_installment = weekly_net * AFFORDABILITY_SHARE
 
-    if len(integrity_fails) >= 2:
+    purpose_fail = any(c.id == "chk_purpose" and c.result == "fail" for c in checks)
+    interview_fail = any(c.id == "chk_interview" and c.result == "fail" for c in checks)
+    other_fails = [c for c in fails if c.id not in ("chk_purpose", "chk_interview")]
+    if len(integrity_fails) >= 2 or interview_fail:
         decision = "refer"
-    elif fails:
+    elif purpose_fail:
+        decision = "decline"
+    elif other_fails:
         decision = "approve_reduced"
     else:
         decision = "approve"
@@ -228,9 +233,9 @@ def size_loan(market: str, stats: dict, checks: list[Check], purchases_total: in
     rate_total = m["flat_rate_month"] * tenor * 7 / 30
     affordable_principal = max_installment * tenor / (1 + rate_total)
     principal = _round_down(min(m["first_loan_cap"], affordable_principal), m["amount_step"])
-    if decision == "refer":
+    if decision in ("refer", "decline"):
         principal = 0
-    if decision != "refer" and principal < m["min_loan"]:
+    elif principal < m["min_loan"]:
         decision, principal = "decline", 0
 
     pattern = weekly_pattern(points, use="statement" if stats["statement_total"] else "ledger")
@@ -244,9 +249,17 @@ def size_loan(market: str, stats: dict, checks: list[Check], purchases_total: in
     citations.append(Citation(source="Bukti sample lender policy §2.4",
                               text="When notebook sales are not supported by payment records, size the loan on the "
                                    "statement-implied sales, not the notebook."))
-    if decision == "refer":
+    if decision == "refer" and len(integrity_fails) >= 2:
         citations.append(Citation(source="Bukti sample lender policy §5.2",
                                   text="Two or more integrity failures require human review before any offer is made."))
+    if interview_fail:
+        citations.append(Citation(source="Bukti sample lender policy §5.3",
+                                  text="Interview answers that contradict the evidence, or two or more unanswered key "
+                                       "questions, require human review."))
+    if purpose_fail:
+        citations.append(Citation(source="Bukti sample lender policy §1.3",
+                                  text="Loans fund productive business use only: stock, equipment, expansion or "
+                                       "working capital."))
 
     return {
         "decision": decision, "amount": principal, "tenor_weeks": tenor if principal else 0, "schedule": schedule,

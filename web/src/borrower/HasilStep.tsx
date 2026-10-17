@@ -80,6 +80,8 @@ function Progress() {
 }
 
 function borrowerReasons(app: Application, memo: Memo, t: ReturnType<typeof useBorrower>['t']): string[] {
+  // The memo model writes reasons for THIS case in the borrower's language; templates are only a fallback.
+  if (memo.borrower_reasons && memo.borrower_reasons.length) return memo.borrower_reasons.slice(0, 3)
   const out: string[] = []
   const recon = app.checks.find((c) => c.id === 'chk_share') ?? app.checks.find((c) => c.agent === 'reconciler' && /vs/i.test(c.name))
   const years = app.facts.find((f) => f.field === 'years_in_business')

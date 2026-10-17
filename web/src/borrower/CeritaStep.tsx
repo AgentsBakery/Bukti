@@ -56,6 +56,14 @@ export function CeritaStep() {
   const [askingMic, setAskingMic] = useState(false)
 
   useEffect(() => () => conn.current?.close(), [])
+  // A finished live interview moves straight on to the result, so the assessment always runs.
+  const justFinished = useRef(false)
+  useEffect(() => {
+    if (phase !== 'done' || already || justFinished.current) return
+    justFinished.current = true
+    const timer = window.setTimeout(() => goto('hasil'), 2600)
+    return () => window.clearTimeout(timer)
+  }, [phase, already, goto])
 
   // derive "you're speaking" from live levels (cheap 5 Hz poll)
   useEffect(() => {

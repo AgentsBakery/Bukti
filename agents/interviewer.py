@@ -109,15 +109,22 @@ What their notebook already shows (do not read numbers out like a report; use th
 
 Interview plan, one question per turn, about 2 minutes in total:
 1. Greet them by name, say in one sentence that you'll ask a few questions about their shop, and ask if that's OK.
-2. How long they have run the shop.
-3. What they sell on a normal day.
+   (Do not record their consent as a fact.)
+2. How long they have run the shop. → record_fact field "years_in_business".
+3. How much money they take in on a normal day — ask for an AMOUNT in {app.currency} (for example: "About how many
+   {('rupiah' if app.market == 'ID' else 'rupees')} do you take in on a normal day?"). → field "daily_sales".
 4. Ask about the weakest week from the notebook in plain words (for example: "Your notebook shows sales are lower in
-   the second week of the month. Why is that?").
-5. What they would use the loan for.
-6. Whether the household has any other income.
+   the second week of the month. Why is that?"). → field "slow_period_reason".
+5. What exactly they would use the loan for — what they would buy. → field "loan_purpose".
+6. Whether the household has any other income. → field "other_income".
 7. Thank them warmly, say their result will be ready in a moment, then call end_interview.
 
-After every answer, call record_fact with the borrower's own words as the quote, then ask the next question.
+Rules for answers:
+- If an answer does not answer the question (for example they name products when you asked for an amount, joke, or
+  change the subject), politely re-ask ONCE in simpler words. If the second answer still does not answer it, call
+  record_fact with value "unanswered" and their words as the quote, then move on.
+- Record what they actually said, never what you hoped to hear. Keep their exact words in the quote.
+- Do not argue, judge or warn them about their answers; the loan officer reviews everything.
 Never promise approval, never mention a loan amount, and never ask about religion, ethnicity, marital status or age.
 If they ask something you cannot answer, say the loan officer will help them."""
     return LlmAgent(
@@ -137,6 +144,7 @@ async def run_interview(ws: WebSocket, app: Application, lang: str) -> None:
 
     async with store.lock(app_id):
         a = await store.get(app_id)
+        a.language = lang  # the borrower's chosen language drives the memo and result screen too
         s = a.step("interviewer")
         s.status, s.started_at, s.summary = "running", now_iso(), f"Interview in {LANG_NAMES[lang]}"
         await store.save(a)

@@ -148,6 +148,7 @@ flowchart TB
     subgraph PAR["ParallelAgent: verify"]
       RC[ReconcilerAgent<br/>share · rhythm · idle days]
       IG[IntegrityAgent<br/>round numbers · regularity ·<br/>reused photos · Model Armor]
+      VF[InterviewVerifier<br/>gemini-3.8-flash claims →<br/>rules vs notebook]
     end
     PAR --> PO[PolicyAgent<br/>verified cash → affordable loan<br/>cash-flow-shaped schedule]
     PO --> ME[MemoAgent]
@@ -171,7 +172,8 @@ flowchart TB
 | Benchmark | `BaseAgent` | — (BigQuery) | Decides input | validated identifiers, parameterised query, cached |
 | Reconciler | `BaseAgent` | — | **Decides** | deterministic, unit-tested on ground truth |
 | Integrity | `BaseAgent` | — + Model Armor | **Decides** | screens notes, descriptions, quotes |
-| Policy | `BaseAgent` | — | **Decides** | 30% weekly affordability cap, first-loan caps, refer on ≥2 integrity failures |
+| Interview Verifier | `BaseAgent` | gemini-3.8-flash (claims only) | **Decides** (rules) | Gemini only turns answers into typed claims (amount, business age, purpose kind); deterministic rules compare them with the notebook. Contradiction or ≥2 unanswered → `chk_interview` fail → refer (§5.3); non-business purpose → `chk_purpose` fail → decline with coaching (§1.3) |
+| Policy | `BaseAgent` | — | **Decides** | 30% weekly affordability cap, first-loan caps, refer on ≥2 integrity failures or an interview contradiction, decline a non-business purpose |
 | Memo writer | `LlmAgent` | gemini-4-argon | Explains | output schema, never sets numbers, 120 s timeout → rules-only memo |
 | Officer Copilot | `LlmAgent` + 6 tools | gemini-3.8-flash | Explains | read-only tools scoped to one case, Model Armor on questions, 90 s timeout |
 
@@ -206,7 +208,7 @@ sequenceDiagram
   L-->>P: speech 24 kHz + transcripts
   L->>API: record_fact(...) ×5
   P->>API: GET /assess/stream (SSE)
-  API->>A: benchmark → reconcile ∥ integrity → policy
+  API->>A: benchmark → reconcile ∥ integrity ∥ interview verifier → policy
   A->>R: memo prompt (numbers fixed)
   R-->>A: headline, reasons, coaching, borrower message
   API-->>P: memo → coin calendar
@@ -358,6 +360,7 @@ GROUP BY app_id ORDER BY usd DESC;
 | `app/store.py`, `app/packs.py` | Applications, evidence images, demo packs |
 | `agents/extractor.py` | Vision extraction agent |
 | `agents/assess.py`, `agents/analysis.py` | Benchmark, reconcile, integrity, policy, memo |
+| `agents/verifier.py` | Interview Verifier: answers → typed claims → checks against the evidence |
 | `agents/interviewer.py` | Live voice interviewer |
 | `agents/copilot.py` | Officer Copilot |
 | `agents/observability.py` | ADK plugin |

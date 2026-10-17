@@ -338,6 +338,13 @@ export function createMockApi(): BuktiApi {
             await emitChecks(by('integrity'))
             return `${by('integrity').length} forensic tests · ${tally(by('integrity'))}`
           })
+          await runAgent('verifier', 'Checking the interview against the evidence', async () => {
+            const facts = store.get(appId)!.facts
+            if (!facts.length) return 'No interview to verify'
+            recordModel(appId, 'verifier', MODELS.extract, 'interview claims', { latency: [1800, 3200], tin: [420, 640], tout: [90, 140] })
+            await emitChecks(by('interviewer'))
+            return `${facts.length} answers compared with the notebook · ${tally(by('interviewer'))}`
+          })
           await runAgent('benchmark', `Comparing with similar ${P.shop}s`, async () => {
             recordTool(appId, 'benchmark', 'bigquery.peer_benchmarks', `${P.shop}s · ${P.country} · peer band + median daily sales`, [480, 1150])
             await emitChecks(by('benchmark'))

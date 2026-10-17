@@ -21,7 +21,7 @@ from google.adk.models import Gemini
 from google.genai import types
 from pydantic import BaseModel, Field
 
-from agents import analysis, shield
+from agents import analysis, shield, verifier
 from agents.extractor import sse
 from app.config import settings
 from app.genai import adk_client_kwargs
@@ -164,6 +164,21 @@ class IntegrityAgent(StepAgent):
                 [{"type": "check", "check": c.model_dump()} for c in checks])
 
 
+class InterviewVerifierAgent(StepAgent):
+    label: str = "Checking the interview against the evidence"
+
+    async def work(self, app_id, ctx):
+        app = await store.get(app_id)
+        checks = await verifier.verify(app)
+        async with mutate(app_id) as app:
+            _upsert_checks(app, checks)
+        worst = "fail" if any(c.result == "fail" for c in checks) else "warn" if any(
+            c.result == "warn" for c in checks) else "pass"
+        summary = {"pass": "Answers match the evidence", "warn": "Some answers unclear",
+                   "fail": "Answers conflict with evidence or policy"}[worst] if app.facts else "No interview to verify"
+        return summary, [{"type": "check", "check": c.model_dump()} for c in checks]
+
+
 class PolicyAgent(StepAgent):
     label: str = "Applying lending policy"
 
@@ -204,6 +219,8 @@ class MemoDraft(BaseModel):
     reasons: list[Ref] = Field(description="Exactly 3 reasons in English, each citing ids from the evidence given")
     risks: list[Ref] = Field(description="0-3 risks in English, each citing ids")
     coaching: list[str] = Field(description="3 short, warm, practical tips in the BORROWER's language to qualify for more next time")
+    borrower_reasons: list[str] = Field(description="Exactly 3 short reasons in the BORROWER's language, specific to THIS case "
+                                                    "(their numbers, their own answers), explaining the outcome simply")
     borrower_message: str = Field(description="2-3 warm, simple sentences in the BORROWER's language explaining the outcome with dignity")
 
 
@@ -231,7 +248,8 @@ Policy decision: {sizing.get('decision')} — amount {sizing.get('amount')}, ten
 verified monthly sales {sizing.get('verified_monthly_sales')}, net monthly cash {sizing.get('net_monthly_cashflow')},
 weekly cash pattern by week of month {sizing.get('weekly_pattern')} (repayments are shaped to it).
 
-Checks (cite these ids): {json.dumps(checks, ensure_ascii=False)}
+Checks (cite these ids; chk_interview compares the interview with the evidence, chk_purpose is the loan purpose):
+{json.dumps(checks, ensure_ascii=False)}
 Interview facts (cite these ids): {json.dumps(facts, ensure_ascii=False)}
 Sample notebook lines (cite these ids): {json.dumps(sample, ensure_ascii=False)}
 Metrics: {app.metrics.model_dump_json() if app.metrics else '{}'}
@@ -243,7 +261,11 @@ Write:
 - coaching: 3 tips in {LANG_NAMES[app.language]}, practical for a small shop (e.g. take more payments by QRIS/UPI,
   keep writing the notebook daily, keep supplier receipts).
 - borrower_message: in {LANG_NAMES[app.language]}, address them by name, warm and respectful. If the case is referred
-  or declined, never accuse; explain that some records could not be confirmed yet and what would help.
+  or declined, never accuse; explain plainly what could not be confirmed or what the policy does not fund, and what
+  would help.
+- borrower_reasons: exactly 3 short sentences in {LANG_NAMES[app.language]} that explain THIS outcome using THIS case's
+  facts — their real numbers and what they said in the interview (e.g. if the loan purpose was declined, say the loan
+  can fund stock, equipment or expansion; if answers conflicted with the notebook, say which). No generic phrases.
 Never mention gender, religion, ethnicity, age or marital status."""
 
 
@@ -265,7 +287,7 @@ def fallback_draft(app: Application, sizing: dict) -> MemoDraft:
         headline=f"{sizing.get('decision', 'refer').replace('_', ' ').title()} — see checks.",
         reasons=[Ref(text=c.summary, refs=[c.id]) for c in app.checks if c.result == "pass"][:3],
         risks=[Ref(text=c.summary, refs=[c.id]) for c in fails][:3],
-        coaching=[], borrower_message="")
+        coaching=[], borrower_message="", borrower_reasons=[])
 
 
 class MemoAgent(BaseAgent):
@@ -293,7 +315,8 @@ class MemoAgent(BaseAgent):
             decision=sizing.get("decision", "refer"), amount=sizing.get("amount", 0),
             tenor_weeks=sizing.get("tenor_weeks", 0), schedule=sizing.get("schedule", []),
             headline=draft.headline, reasons=draft.reasons, risks=draft.risks, coaching=draft.coaching,
-            borrower_message=draft.borrower_message, citations=sizing.get("citations", []), model=model)
+            borrower_message=draft.borrower_message, borrower_reasons=draft.borrower_reasons[:3],
+            citations=sizing.get("citations", []), model=model)
         async with mutate(app_id) as app:
             app.memo = memo
             app.status = "ready"

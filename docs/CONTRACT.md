@@ -39,7 +39,7 @@ type Market = "ID" | "IN";
 type Lang = "id" | "ta" | "en";
 type EvidenceType = "ledger" | "statement" | "receipt" | "shop";
 type Status = "draft" | "extracting" | "extracted" | "interviewed" | "assessing" | "ready" | "decided";
-type AgentName = "extractor" | "interviewer" | "reconciler" | "integrity" | "benchmark" | "policy" | "memo";
+type AgentName = "extractor" | "interviewer" | "verifier" | "reconciler" | "integrity" | "benchmark" | "policy" | "memo";
 
 interface Persona { name: string; business: string; city: string }
 
@@ -123,6 +123,7 @@ interface Memo {
   risks: { text: string; refs: string[] }[];
   coaching: string[];                // borrower-facing, their language
   borrower_message: string;          // borrower-facing summary, their language
+  borrower_reasons: string[];        // 3 case-specific reasons, borrower's language (result screen "Why?")
   citations: { source: string; text: string }[];
   model: string;
 }

@@ -4,7 +4,7 @@ export type Market = 'ID' | 'IN'
 export type Lang = 'id' | 'ta' | 'en'
 export type EvidenceType = 'ledger' | 'statement' | 'receipt' | 'shop'
 export type Status = 'draft' | 'extracting' | 'extracted' | 'interviewed' | 'assessing' | 'ready' | 'decided'
-export type AgentName = 'extractor' | 'interviewer' | 'reconciler' | 'integrity' | 'benchmark' | 'policy' | 'memo'
+export type AgentName = 'extractor' | 'interviewer' | 'verifier' | 'reconciler' | 'integrity' | 'benchmark' | 'policy' | 'memo'
 
 export interface Persona {
   name: string
@@ -106,6 +106,8 @@ export interface Memo {
   risks: { text: string; refs: string[] }[]
   coaching: string[]
   borrower_message: string
+  /** Three case-specific reasons in the borrower's language, written by the memo model. */
+  borrower_reasons?: string[]
   citations: { source: string; text: string }[]
   model: string
 }
@@ -192,6 +194,7 @@ export type InterviewServerMessage =
 export const AGENT_ORDER: AgentName[] = [
   'extractor',
   'interviewer',
+  'verifier',
   'reconciler',
   'integrity',
   'benchmark',

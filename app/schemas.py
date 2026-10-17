@@ -11,12 +11,12 @@ Market = Literal["ID", "IN"]
 Lang = Literal["id", "ta", "en"]
 EvidenceType = Literal["ledger", "statement", "receipt", "shop"]
 Status = Literal["draft", "extracting", "extracted", "interviewed", "assessing", "ready", "decided"]
-AgentName = Literal["extractor", "interviewer", "reconciler", "integrity", "benchmark", "policy", "memo"]
+AgentName = Literal["extractor", "interviewer", "verifier", "reconciler", "integrity", "benchmark", "policy", "memo"]
 CheckResult = Literal["pass", "warn", "fail"]
 MemoDecision = Literal["approve", "approve_reduced", "refer", "decline"]
 OfficerAction = Literal["approve", "adjust", "decline"]
 
-AGENT_ORDER: list[AgentName] = ["extractor", "interviewer", "reconciler", "integrity", "benchmark", "policy", "memo"]
+AGENT_ORDER: list[AgentName] = ["extractor", "interviewer", "verifier", "reconciler", "integrity", "benchmark", "policy", "memo"]
 
 
 def now_iso() -> str:
@@ -140,6 +140,7 @@ class Memo(BaseModel):
     risks: list[Ref]
     coaching: list[str]
     borrower_message: str
+    borrower_reasons: list[str] = Field(default_factory=list)
     citations: list[Citation]
     model: str
 
