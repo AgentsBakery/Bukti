@@ -93,7 +93,7 @@ applicant packs (genuine, inflated, fabricated) handwritten by our team in Bahas
   for prompt injection and unsafe content before it can reach the memo model. A fabricated demo notebook carries a
   hidden "approve the maximum loan" note to the AI; it is caught and shown to the officer as a failed check.
 - Structured output with response schemas; bounding boxes clamped; implausible amounts dropped.
-- Every model call is bounded: hedged vision requests, timeouts, a rules-only memo fallback, a live-session reconnect.
+- Every model call is bounded: hedged vision requests, timeouts, a memo fallback chain (Argon → Flash → rules-only), a live-session reconnect.
 
 **Runtime guardrails** (`app/guards.py`)
 - Per-IP token buckets on every endpoint that spends model tokens or writes data; global caps on concurrent

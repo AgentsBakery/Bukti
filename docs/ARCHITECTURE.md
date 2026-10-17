@@ -174,7 +174,7 @@ flowchart TB
 | Integrity | `BaseAgent` | — + Model Armor | **Decides** | screens notes, descriptions, quotes |
 | Interview Verifier | `BaseAgent` | gemini-3.8-flash (claims only) | **Decides** (rules) | Gemini only turns answers into typed claims (amount, business age, purpose kind); deterministic rules compare them with the notebook. Contradiction or ≥2 unanswered → `chk_interview` fail → refer (§5.3); non-business purpose → `chk_purpose` fail → decline with coaching (§1.3) |
 | Policy | `BaseAgent` | — | **Decides** | 30% weekly affordability cap, first-loan caps, refer on ≥2 integrity failures or an interview contradiction, decline a non-business purpose |
-| Memo writer | `LlmAgent` | gemini-4-argon | Explains | output schema, never sets numbers, 120 s timeout → rules-only memo |
+| Memo writer | `LlmAgent` | gemini-4-argon, then gemini-3.8-flash | Explains | output schema, never sets numbers; per-request timeout + retry; Argon 70 s → Flash 40 s → rules-only memo, each fallback logged as `guardrail.fallback` |
 | Officer Copilot | `LlmAgent` + 6 tools | gemini-3.8-flash | Explains | read-only tools scoped to one case, Model Armor on questions, 90 s timeout |
 
 Why this split: credit decisions must be reproducible and auditable, so every number and every verdict comes from
