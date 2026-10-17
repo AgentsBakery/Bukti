@@ -15,12 +15,13 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile, Web
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from google.genai import types
 
+from agents import copilot
 from agents.pipeline import run_stage
-from app import packs
-from app import guards
+from app import guards, packs, telemetry
+from app.auth import Caller, auth_enabled, optional_caller, required_caller, users, FIREBASE_WEB_CONFIG
 from app.config import settings
 from app.genai import client
-from app.schemas import (Application, CreateApplication, Decision, DecisionIn, Persona, TtsIn, now_iso)
+from app.schemas import (Application, CopilotIn, CreateApplication, Decision, DecisionIn, Persona, TtsIn, now_iso)
 from app.store import new_id, store
 
 
@@ -30,7 +31,7 @@ class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         payload = {"severity": record.levelname, "logger": record.name, "message": record.getMessage()}
         for key, value in record.__dict__.items():
-            if key in {"app_id", "agent", "stage", "error", "attempt", "evidence_id", "pack_id"}:
+            if key in {"app_id", "agent", "stage", "error", "attempt", "evidence_id", "pack_id", "event"}:
                 payload[key] = value
         if record.exc_info:
             payload["exception"] = self.formatException(record.exc_info)
@@ -55,9 +56,11 @@ async def _warm_models() -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    task = asyncio.create_task(_warm_models() if settings.warm_models else asyncio.sleep(0))
+    tasks = [asyncio.create_task(_warm_models() if settings.warm_models else asyncio.sleep(0)),
+             asyncio.create_task(telemetry.flusher())]
     yield
-    task.cancel()
+    for t in tasks:
+        t.cancel()
 
 
 app = FastAPI(title="Bukti", version="0.1.0", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
@@ -83,22 +86,47 @@ async def demo_packs():
     return [p.model_dump() for p in packs.list_packs()]
 
 
+# ---------- Auth (optional Google sign-in) ----------
+
+@app.get("/api/auth/config")
+async def auth_config():
+    return {"enabled": auth_enabled(), **({"firebase": FIREBASE_WEB_CONFIG} if auth_enabled() else {})}
+
+
+@app.post("/api/auth/session", dependencies=[Depends(guards.rate_limit("load"))])
+async def auth_session(caller: Caller = Depends(required_caller)):
+    user = await users.upsert_login(caller)
+    telemetry.emit("auth.login", user_id=user.uid, detail=f"login #{user.login_count}")
+    return user.model_dump()
+
+
+@app.get("/api/me")
+async def me(caller: Caller = Depends(required_caller)):
+    user = await users.get(caller.uid)
+    return (user or await users.upsert_login(caller)).model_dump()
+
+
 @app.post("/api/demo/packs/{pack_id}/load", dependencies=[Depends(guards.rate_limit("load"))])
-async def load_pack(pack_id: str):
+async def load_pack(pack_id: str, caller: Caller | None = Depends(optional_caller)):
     if pack_id not in {p.id for p in packs.list_packs()}:
         raise HTTPException(404, "unknown pack")
     a = await packs.load_pack(pack_id)
-    log.info("demo pack loaded", extra={"app_id": a.id, "pack_id": pack_id})
+    if caller:
+        a.owner_uid = caller.uid
+        await store.save(a)
+    telemetry.emit("application.created", app_id=a.id, user_id=caller.uid if caller else None,
+                   detail=f"demo pack {pack_id}")
     return {"application_id": a.id}
 
 
 @app.post("/api/applications", dependencies=[Depends(guards.rate_limit("load"))])
-async def create_application(body: CreateApplication):
+async def create_application(body: CreateApplication, caller: Caller | None = Depends(optional_caller)):
     a = Application(
         id=new_id("app"), market=body.market, language=body.language,
-        currency="Rp" if body.market == "ID" else "₹",
+        currency="Rp" if body.market == "ID" else "₹", owner_uid=caller.uid if caller else None,
         persona=body.persona or Persona(name="Applicant", business="Small shop", city=""))
     await store.save(a)
+    telemetry.emit("application.created", app_id=a.id, user_id=caller.uid if caller else None, detail="new")
     return {"application_id": a.id}
 
 
@@ -128,7 +156,9 @@ async def upload_evidence(app_id: str, file: UploadFile = File(...), type: str =
     try:
         ev = await store.add_upload(a, data, type)  # type: ignore[arg-type]
     except Exception as exc:  # noqa: BLE001
+        telemetry.emit("guardrail.blocked", app_id=app_id, status="blocked", detail="unreadable upload rejected")
         raise HTTPException(400, f"not a readable image: {exc}") from exc
+    telemetry.emit("evidence.uploaded", app_id=app_id, detail=f"{type}, {len(data) // 1024} KB")
     return ev.model_dump()
 
 
@@ -172,8 +202,10 @@ async def _replay_assess(a: Application):
         yield _sse({"type": "agent", "agent": step.agent, "status": step.status, "summary": step.summary})
 
 
-def _stream(stage: str, app_id: str, force: bool):
+def _stream(stage: str, app_id: str, force: bool, user_id: str | None = None):
     async def gen():
+        telemetry.current_app_id.set(app_id)
+        telemetry.current_user_id.set(user_id)
         a = await store.get(app_id)
         if a is None:
             yield _sse({"type": "error", "message": "application not found"})
@@ -193,13 +225,19 @@ def _stream(stage: str, app_id: str, force: bool):
                     if s.status == "pending":
                         s.status, s.summary = "done", "Interview skipped"
                 await store.save(a)
+            started = asyncio.get_running_loop().time()
+            telemetry.emit("stage.started", agent=stage)
+            status = "ok"
             try:
                 async with guards.stage_slots:
                     async for payload in run_stage(stage, app_id):
                         yield _sse(payload)
             except Exception as exc:  # noqa: BLE001
+                status = "error"
                 log.exception("stage failed", extra={"stage": stage, "app_id": app_id})
                 yield _sse({"type": "error", "message": f"{stage} failed: {str(exc)[:200]}"})
+            telemetry.emit("stage.completed", agent=stage, status=status,
+                           latency_ms=int((asyncio.get_running_loop().time() - started) * 1000))
         a = await store.get(app_id)
         yield _sse({"type": "done", "application": a.model_dump()})
 
@@ -208,27 +246,49 @@ def _stream(stage: str, app_id: str, force: bool):
 
 
 @app.get("/api/applications/{app_id}/extract/stream", dependencies=[Depends(guards.rate_limit("stage"))])
-async def extract_stream(app_id: str, force: bool = False):
-    return _stream("extract", app_id, force)
+async def extract_stream(app_id: str, force: bool = False, caller: Caller | None = Depends(optional_caller)):
+    return _stream("extract", app_id, force, caller.uid if caller else None)
 
 
 @app.get("/api/applications/{app_id}/assess/stream", dependencies=[Depends(guards.rate_limit("stage"))])
-async def assess_stream(app_id: str, force: bool = False):
-    return _stream("assess", app_id, force)
+async def assess_stream(app_id: str, force: bool = False, caller: Caller | None = Depends(optional_caller)):
+    return _stream("assess", app_id, force, caller.uid if caller else None)
+
+
+@app.get("/api/applications/{app_id}/events")
+async def app_events(app_id: str):
+    await _app_or_404(app_id)
+    return [e.model_dump() for e in telemetry.timeline(app_id)]
+
+
+@app.post("/api/applications/{app_id}/copilot", dependencies=[Depends(guards.rate_limit("copilot"))])
+async def ask_copilot(app_id: str, body: CopilotIn, caller: Caller | None = Depends(optional_caller)):
+    await _app_or_404(app_id)
+    uid = caller.uid if caller else None
+
+    async def gen():
+        telemetry.current_app_id.set(app_id)
+        telemetry.current_user_id.set(uid)
+        async for payload in copilot.ask(app_id, body.question, body.session_id, uid):
+            yield _sse(payload)
+
+    return StreamingResponse(gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 @app.post("/api/applications/{app_id}/decision", dependencies=[Depends(guards.rate_limit("decision"))])
-async def decide(app_id: str, body: DecisionIn):
+async def decide(app_id: str, body: DecisionIn, caller: Caller | None = Depends(optional_caller)):
     async with store.lock(app_id):
         a = await _app_or_404(app_id)
         amount = body.amount if body.amount is not None else (a.memo.amount if a.memo else 0)
         if body.action == "decline":
             amount = 0
         a.decision = Decision(action=body.action, amount=max(0, int(amount)), note=body.note[:500],
-                              officer="Loan officer (demo)", ts=now_iso())
+                              officer=caller.name if caller else "Loan officer (demo)", ts=now_iso())
         a.status = "decided"
         await store.save(a)
-    log.info("officer decision", extra={"app_id": app_id})
+    telemetry.emit("decision.made", app_id=app_id, user_id=caller.uid if caller else None,
+                   detail=f"{body.action} (memo said {a.memo.decision if a.memo else 'n/a'})")
     return a.model_dump()
 
 
@@ -253,6 +313,7 @@ async def _tts(text: str, lang: str) -> bytes:
     cache = settings.cache_dir / "tts" / f"{key}.wav"
     if cache.exists():
         return cache.read_bytes()
+    started = asyncio.get_running_loop().time()
     resp = await client().aio.models.generate_content(
         model=settings.model_tts,
         contents=f"Say warmly and slowly, like a kind shopkeeper's neighbour: {text}",
@@ -263,6 +324,11 @@ async def _tts(text: str, lang: str) -> bytes:
                 voice_config=types.VoiceConfig(prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=VOICE[lang]))),
         ),
     )
+    usage = resp.usage_metadata
+    telemetry.emit("model.call", agent="tts", model=settings.model_tts,
+                   latency_ms=int((asyncio.get_running_loop().time() - started) * 1000),
+                   input_tokens=getattr(usage, "prompt_token_count", None),
+                   output_tokens=getattr(usage, "candidates_token_count", None), detail=lang)
     blob = resp.candidates[0].content.parts[0].inline_data
     # Newer TTS models return a complete WAV; older ones return raw 24 kHz PCM.
     wav = blob.data if (blob.mime_type or "").startswith("audio/wav") or blob.data[:4] == b"RIFF" else _wav(blob.data)
@@ -307,8 +373,14 @@ async def interview(ws: WebSocket, app_id: str, lang: str = "id"):
         await ws.send_text(json.dumps({"type": "error", "message": problem}))
         await ws.close()
         return
+    telemetry.current_app_id.set(app_id)
+    telemetry.emit("interview.started", app_id=app_id, agent="interviewer", detail=f"lang={lang}")
+    started = asyncio.get_running_loop().time()
     async with guards.interview_slots:
         await run_interview(ws, a, lang if lang in ("id", "ta", "en") else a.language)
+    a = await store.get(app_id)
+    telemetry.emit("interview.completed", app_id=app_id, agent="interviewer", detail=f"{len(a.facts)} facts",
+                   latency_ms=int((asyncio.get_running_loop().time() - started) * 1000))
 
 
 # ---------- Web app ----------

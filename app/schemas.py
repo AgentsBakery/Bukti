@@ -163,6 +163,7 @@ class Decision(BaseModel):
 class Application(BaseModel):
     id: str
     pack_id: str | None = None
+    owner_uid: str | None = None
     persona: Persona
     market: Market
     language: Lang
@@ -209,6 +210,11 @@ class DecisionIn(BaseModel):
     action: OfficerAction
     amount: int | None = None
     note: str = ""
+
+
+class CopilotIn(BaseModel):
+    question: str = Field(min_length=2, max_length=600)
+    session_id: str | None = None
 
 
 class TtsIn(BaseModel):

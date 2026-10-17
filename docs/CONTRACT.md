@@ -184,3 +184,56 @@ Server → client:
   - `{type:"interrupted"}` (stop playback)
   - `{type:"done", facts: Fact[]}`
   - `{type:"error", message:string}`
+
+## Auth (optional Google sign-in via Firebase Auth)
+
+Sign-in is never required. When signed in, the client sends `Authorization: Bearer <Firebase ID token>` on every
+`/api` request; the backend verifies it, links applications to the user, and records the officer's name on decisions.
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| GET | `/api/auth/config` | | `{enabled: boolean, firebase?: {apiKey, authDomain, projectId, appId}}` — `enabled:false` → show guest-only |
+| POST | `/api/auth/session` | (Bearer token required) | `User` — upserts the user row, logs `auth.login` |
+| GET | `/api/me` | (Bearer optional) | `User` or `401` |
+
+```ts
+interface User { uid: string; email: string; name: string; photo_url: string | null; role: "officer";
+                 created_at: string; last_login_at: string; login_count: number }
+```
+
+`Application.owner_uid?: string | null` and `Decision.officer` now carry the signed-in officer's name (or
+"Loan officer (demo)" for guests).
+
+## Officer Copilot (tool-using Gemini agent over one case)
+
+`POST /api/applications/{id}/copilot` with `{question: string, session_id?: string}` → `text/event-stream`:
+
+```ts
+{ type: "session", session_id: string }                      // reuse to keep the conversation
+{ type: "tool", name: string, args: object }                   // e.g. get_checks, get_entries — show "Looking at …"
+{ type: "highlight", refs: string[], note: string }            // entry / check / statement ids → highlight on the photo
+{ type: "answer_delta", text: string }                         // streamed answer text (append)
+{ type: "answer", text: string, refs: string[] }               // final answer (replace) + ids it cites
+{ type: "error", message: string }
+{ type: "done" }
+```
+
+Suggested questions: "Why are sales lower in week 2?", "Which days don't match the QRIS records?",
+"Is this notebook genuine?", "What should I ask the borrower before approving?"
+
+## Agent run log (observability)
+
+`GET /api/applications/{id}/events` → `Event[]` (newest last), also written to BigQuery `bukti.events`.
+
+```ts
+interface Event {
+  event_id: string; ts: string;
+  type: "auth.login" | "application.created" | "evidence.uploaded" | "stage.started" | "stage.completed"
+      | "agent.started" | "agent.completed" | "model.call" | "tool.call" | "interview.started"
+      | "interview.completed" | "copilot.question" | "decision.made" | "guardrail.blocked";
+  app_id: string | null; user_id: string | null;
+  agent: string | null; model: string | null; tool: string | null;
+  latency_ms: number | null; input_tokens: number | null; output_tokens: number | null;
+  cost_usd: number | null; status: "ok" | "error" | "blocked"; detail: string;
+}
+```

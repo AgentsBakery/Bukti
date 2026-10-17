@@ -56,6 +56,17 @@ curl -fsS -o /dev/null -X POST \
   -d '{"filterConfig":{"piAndJailbreakFilterSettings":{"filterEnforcement":"ENABLED","confidenceLevel":"LOW_AND_ABOVE"},"raiSettings":{"raiFilters":[{"filterType":"HATE_SPEECH","confidenceLevel":"MEDIUM_AND_ABOVE"},{"filterType":"HARASSMENT","confidenceLevel":"MEDIUM_AND_ABOVE"},{"filterType":"DANGEROUS","confidenceLevel":"MEDIUM_AND_ABOVE"},{"filterType":"SEXUALLY_EXPLICIT","confidenceLevel":"MEDIUM_AND_ABOVE"}]}}}' \
   || echo "   (template already exists)"
 
+echo "==> Events table + log sink (BigQuery)"
+bq --project_id "$PROJECT" --location "$REGION" show "$DATASET.events" >/dev/null 2>&1 || \
+  bq --project_id "$PROJECT" --location "$REGION" mk --table --time_partitioning_field ts --time_partitioning_type DAY \
+    --clustering_fields type,app_id "$DATASET.events" data/benchmarks/events_schema.json
+bq --project_id "$PROJECT" --location "$REGION" show bukti_logs >/dev/null 2>&1 || \
+  bq --project_id "$PROJECT" --location "$REGION" mk -d bukti_logs
+gc logging sinks describe bukti-logs-to-bq >/dev/null 2>&1 || gc logging sinks create bukti-logs-to-bq \
+  "bigquery.googleapis.com/projects/$PROJECT/datasets/bukti_logs" --use-partitioned-tables \
+  --log-filter="resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"$SERVICE\""
+echo "    (grant the sink writer identity WRITER on bukti_logs and the runtime SA WRITER on $DATASET; see docs/OPERATIONS.md)"
+
 echo "==> Cloud Run"
 gc run deploy "$SERVICE" --source . --region "$REGION" --service-account "$SA" \
   --no-invoker-iam-check --min-instances 1 --max-instances 1 --cpu 2 --memory 2Gi \

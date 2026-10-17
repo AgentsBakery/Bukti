@@ -11,6 +11,7 @@ import hashlib
 import json
 import logging
 import re
+import time
 from datetime import date
 from collections.abc import AsyncGenerator
 
@@ -20,6 +21,7 @@ from google.genai import types
 from pydantic import BaseModel, Field
 
 from agents import devdata
+from app import telemetry
 from app.config import settings
 from app.genai import client
 from app.schemas import Application, Entry, Evidence, PageNote, StatementDay, now_iso
@@ -125,11 +127,19 @@ async def _generate(prompt: str, image: bytes, schema: type[BaseModel]) -> BaseM
         thinking_config=types.ThinkingConfig(thinking_level="low"),
     )
     async def call():
+        started = time.perf_counter()
         resp = await client().aio.models.generate_content(
             model=settings.model_extract,
             contents=[types.Part.from_bytes(data=image, mime_type=_mime(image)), prompt],
             config=cfg,
         )
+        usage = resp.usage_metadata
+        telemetry.emit("model.call", agent="extractor", model=settings.model_extract,
+                       latency_ms=int((time.perf_counter() - started) * 1000),
+                       input_tokens=getattr(usage, "prompt_token_count", None),
+                       output_tokens=(getattr(usage, "candidates_token_count", 0) or 0)
+                       + (getattr(usage, "thoughts_token_count", 0) or 0) if usage else None,
+                       detail=schema.__name__)
         return resp.parsed if resp.parsed is not None else schema.model_validate_json(resp.text)
 
     last: Exception | None = None

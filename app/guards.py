@@ -16,6 +16,8 @@ from dataclasses import dataclass
 from fastapi import HTTPException, Request, WebSocket
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from app.config import settings
+
 log = logging.getLogger("bukti.guards")
 
 
@@ -32,6 +34,7 @@ LIMITS = {
     "tts": Limit(120, 3600),
     "interview": Limit(10, 3600),   # live voice sessions
     "decision": Limit(120, 3600),
+    "copilot": Limit(60, 3600),
 }
 
 MAX_CONCURRENT_STAGES = 8
@@ -80,14 +83,17 @@ def allow_ws(ws: WebSocket, bucket: str) -> bool:
     return _take((bucket, ip), LIMITS[bucket])
 
 
+_FIREBASE_HOST = f"https://{settings.project}.firebaseapp.com"
 CSP = "; ".join([
     "default-src 'self'",
-    "script-src 'self' blob:",  # blob: for the microphone AudioWorklet module
+    # blob: for the microphone AudioWorklet; Google domains for the Firebase sign-in popup.
+    "script-src 'self' blob: https://apis.google.com https://www.gstatic.com",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
-    "img-src 'self' blob: data:",
+    "img-src 'self' blob: data: https://lh3.googleusercontent.com",
     "media-src 'self' blob: data:",
-    "connect-src 'self'",
+    "connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com",
+    f"frame-src {_FIREBASE_HOST} https://accounts.google.com https://apis.google.com",
     "worker-src 'self' blob:",
     "object-src 'none'",
     "base-uri 'self'",
@@ -105,5 +111,6 @@ class SecurityHeaders(BaseHTTPMiddleware):
         h.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
         h.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
         h.setdefault("Permissions-Policy", "microphone=(self), camera=(self), geolocation=()")
-        h.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+        # same-origin-allow-popups keeps the Google sign-in popup able to report back.
+        h.setdefault("Cross-Origin-Opener-Policy", "same-origin-allow-popups")
         return response

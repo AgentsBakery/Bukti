@@ -17,6 +17,7 @@ from google.genai import types
 from agents.assess import (BenchmarkAgent, IntegrityAgent, MemoAgent, PolicyAgent, ReconcilerAgent,
                            build_memo_writer)
 from agents.extractor import ExtractorAgent
+from agents.observability import ObservabilityPlugin
 
 log = logging.getLogger("bukti.pipeline")
 APP_NAME = "bukti"
@@ -45,8 +46,10 @@ def build_assess_stage() -> SequentialAgent:
 
 
 _runners = {
-    "extract": Runner(app_name=APP_NAME, agent=build_extract_stage(), session_service=sessions),
-    "assess": Runner(app_name=APP_NAME, agent=build_assess_stage(), session_service=sessions),
+    "extract": Runner(app_name=APP_NAME, agent=build_extract_stage(), session_service=sessions,
+                      plugins=[ObservabilityPlugin()]),
+    "assess": Runner(app_name=APP_NAME, agent=build_assess_stage(), session_service=sessions,
+                     plugins=[ObservabilityPlugin()]),
 }
 
 

@@ -20,6 +20,7 @@ from google.adk.tools import ToolContext
 from google.genai import types
 
 from agents import analysis
+from agents.observability import ObservabilityPlugin
 from agents.pipeline import APP_NAME, sessions
 from app.config import settings
 from app.genai import adk_client_kwargs
@@ -140,7 +141,8 @@ async def run_interview(ws: WebSocket, app: Application, lang: str) -> None:
         s.status, s.started_at, s.summary = "running", now_iso(), f"Interview in {LANG_NAMES[lang]}"
         await store.save(a)
 
-    runner = Runner(app_name=APP_NAME, agent=build_interviewer(app, lang), session_service=sessions)
+    runner = Runner(app_name=APP_NAME, agent=build_interviewer(app, lang), session_service=sessions,
+                    plugins=[ObservabilityPlugin()])
     session = await sessions.create_session(app_name=APP_NAME, user_id=app_id, state={"app_id": app_id})
     holder = {"q": LiveRequestQueue()}
     run_config = RunConfig(
