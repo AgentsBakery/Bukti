@@ -20,7 +20,7 @@ from google.adk.models import Gemini
 from google.genai import types
 from pydantic import BaseModel, Field
 
-from agents import analysis
+from agents import analysis, shield
 from agents.extractor import sse
 from app.config import settings
 from app.genai import adk_client_kwargs
@@ -139,6 +139,18 @@ class IntegrityAgent(StepAgent):
     async def work(self, app_id, ctx):
         app = await store.get(app_id)
         checks = analysis.integrity(app.market, app.entries, app.evidence)
+        borrower_text = "\n".join([n.text for n in app.page_notes] + [e.description for e in app.entries]
+                                  + [f.quote for f in app.facts])
+        result, detail = await shield.screen(borrower_text)
+        flagged = [n.evidence_id for n in app.page_notes] if result == "fail" else []
+        checks.append(Check(
+            id="chk_shield", agent="integrity", name="Hidden instructions (Model Armor)", result=result,
+            summary=("Someone wrote instructions aimed at the AI on the evidence. They were blocked and kept out "
+                     "of the memo." if result == "fail" else
+                     "No hidden instructions to the AI in the notebook or the interview." if result == "pass"
+                     else "Text screen unavailable; borrower text kept out of the memo."),
+            detail=detail + (" Notes on the page: " + " | ".join(n.text for n in app.page_notes) if app.page_notes else ""),
+            evidence_refs=flagged))
         async with mutate(app_id) as app:
             _upsert_checks(app, checks)
         fails = sum(c.result == "fail" for c in checks)
@@ -195,7 +207,10 @@ LANG_NAMES = {"id": "Bahasa Indonesia", "ta": "Tamil (Tamil script)", "en": "Eng
 async def memo_instruction(rctx: ReadonlyContext) -> str:
     app = await store.get(rctx.state["app_id"])
     sizing = rctx.state.get("sizing", {})
-    facts = [{"id": f.id, "label": f.label, "value": f.value, "quote": f.quote} for f in app.facts]
+    shield_ok = any(c.id == "chk_shield" and c.result == "pass" for c in app.checks)
+    # Borrower-written text only reaches the model after Model Armor has cleared it.
+    facts = [{"id": f.id, "label": f.label, "value": f.value, **({"quote": f.quote} if shield_ok else {})}
+             for f in app.facts]
     checks = [{"id": c.id, "name": c.name, "result": c.result, "summary": c.summary} for c in app.checks]
     sales = [e for e in app.entries if e.amount_in]
     sample = [{"id": e.id, "date": e.date, "amount_in": e.amount_in} for e in sales[:3] + sales[-2:]]

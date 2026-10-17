@@ -22,7 +22,7 @@ gc services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry
 
 echo "==> Service account (least privilege)"
 gc iam service-accounts describe "$SA" >/dev/null 2>&1 || gc iam service-accounts create "$SA_NAME" --display-name "Bukti Cloud Run"
-for role in roles/aiplatform.user roles/datastore.user roles/bigquery.jobUser roles/bigquery.dataViewer roles/logging.logWriter; do
+for role in roles/aiplatform.user roles/datastore.user roles/bigquery.jobUser roles/bigquery.dataViewer roles/logging.logWriter roles/modelarmor.user; do
   gc projects add-iam-policy-binding "$PROJECT" --member "serviceAccount:$SA" --role "$role" --condition=None >/dev/null
 done
 
@@ -47,6 +47,14 @@ bq --project_id "$PROJECT" --location "$REGION" load --replace --source_format=C
   market:STRING,sector:STRING,region:STRING,median_daily_sales:INT64,share_p25:FLOAT64,share_p75:FLOAT64,n_shops:INT64,source:STRING
 
 if [[ "${1:-}" == "infra" ]]; then echo "==> Infra ready (skipping Cloud Run deploy)"; exit 0; fi
+
+echo "==> Model Armor template (prompt-injection and safety screen for borrower-written text)"
+TOKEN=$(gcloud auth print-access-token)
+curl -fsS -o /dev/null -X POST \
+  "https://modelarmor.${REGION}.rep.googleapis.com/v1/projects/${PROJECT}/locations/${REGION}/templates?templateId=bukti-shield" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"filterConfig":{"piAndJailbreakFilterSettings":{"filterEnforcement":"ENABLED","confidenceLevel":"LOW_AND_ABOVE"},"raiSettings":{"raiFilters":[{"filterType":"HATE_SPEECH","confidenceLevel":"MEDIUM_AND_ABOVE"},{"filterType":"HARASSMENT","confidenceLevel":"MEDIUM_AND_ABOVE"},{"filterType":"DANGEROUS","confidenceLevel":"MEDIUM_AND_ABOVE"},{"filterType":"SEXUALLY_EXPLICIT","confidenceLevel":"MEDIUM_AND_ABOVE"}]}}}' \
+  || echo "   (template already exists)"
 
 echo "==> Cloud Run"
 gc run deploy "$SERVICE" --source . --region "$REGION" --service-account "$SA" \

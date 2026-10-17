@@ -71,6 +71,11 @@ class StatementDay(BaseModel):
     bbox: list[int] | None = None
 
 
+class PageNote(BaseModel):
+    evidence_id: str
+    text: str
+
+
 class Fact(BaseModel):
     id: str
     field: str
@@ -168,6 +173,7 @@ class Application(BaseModel):
     entries: list[Entry] = Field(default_factory=list)
     statement: list[StatementDay] = Field(default_factory=list)
     facts: list[Fact] = Field(default_factory=list)
+    page_notes: list[PageNote] = Field(default_factory=list)
     checks: list[Check] = Field(default_factory=list)
     metrics: Metrics | None = None
     memo: Memo | None = None
