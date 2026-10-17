@@ -6,6 +6,7 @@ officer's and the borrower's language, citing evidence ids it was given. It neve
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from contextlib import asynccontextmanager
@@ -16,6 +17,7 @@ from google.adk.agents import BaseAgent, InvocationContext, LlmAgent
 from google.adk.agents.readonly_context import ReadonlyContext
 from google.adk.events import Event
 from google.adk.models import Gemini
+from google.genai import types
 from pydantic import BaseModel, Field
 
 from agents import analysis
@@ -26,6 +28,7 @@ from app.schemas import Application, Check, Memo, Ref, now_iso
 from app.store import store
 
 log = logging.getLogger("bukti.assess")
+MEMO_TIMEOUT_S = 120
 
 
 @asynccontextmanager
@@ -209,7 +212,7 @@ Sample notebook lines (cite these ids): {json.dumps(sample, ensure_ascii=False)}
 Metrics: {app.metrics.model_dump_json() if app.metrics else '{}'}
 
 Write:
-- headline: one sentence for the loan officer.
+- headline: one sentence for the loan officer. For refer or decline, do not mention an amount or tenor; say why.
 - reasons: exactly 3, concrete, each with refs to the ids above that support it.
 - risks: what the officer should watch; cite ids. If integrity checks failed, say plainly what looks wrong.
 - coaching: 3 tips in {LANG_NAMES[app.language]}, practical for a small shop (e.g. take more payments by QRIS/UPI,
@@ -222,7 +225,8 @@ Never mention gender, religion, ethnicity, age or marital status."""
 def build_memo_writer() -> LlmAgent:
     return LlmAgent(
         name="memo_writer",
-        model=Gemini(model=settings.model_memo, client_kwargs=adk_client_kwargs()),
+        model=Gemini(model=settings.model_memo, client_kwargs=adk_client_kwargs(),
+                     retry_options=types.HttpRetryOptions(attempts=3)),
         instruction=memo_instruction,
         include_contents="none",
         output_schema=MemoDraft,
@@ -250,11 +254,12 @@ class MemoAgent(BaseAgent):
         writer = self.sub_agents[0]
         status = "done"
         try:
-            async for ev in writer.run_async(ctx):
-                yield ev
+            async with asyncio.timeout(MEMO_TIMEOUT_S):
+                async for ev in writer.run_async(ctx):
+                    yield ev
             draft = MemoDraft.model_validate(ctx.session.state.get("memo_draft") or {})
             model = settings.model_memo
-        except Exception:  # noqa: BLE001
+        except (Exception, TimeoutError):  # noqa: BLE001
             log.exception("memo writer failed; using rule-based memo", extra={"app_id": app_id})
             app = await store.get(app_id)
             draft, model, status = fallback_draft(app, ctx.session.state.get("sizing", {})), "rules-only", "done"

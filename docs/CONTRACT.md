@@ -177,7 +177,9 @@ Client → server:
 Server → client:
 - binary frames: raw PCM16 mono 24 kHz agent speech
 - text JSON:
-  - `{type:"transcript", role:"user"|"agent", text:string, final:boolean}`
+  - `{type:"transcript", role:"user"|"agent", text:string, final:boolean}` — `final:false` events are
+    incremental fragments to append; a `final:true` event carries the COMPLETE utterance and replaces the
+    buffered fragments for that turn
   - `{type:"fact", fact: Fact}`
   - `{type:"interrupted"}` (stop playback)
   - `{type:"done", facts: Fact[]}`

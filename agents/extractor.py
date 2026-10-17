@@ -27,6 +27,11 @@ from app.store import new_id, store
 
 log = logging.getLogger("bukti.extractor")
 PROMPT_VERSION = "ledger-v3"
+CALL_TIMEOUT_S = 60
+
+
+def _mime(data: bytes) -> str:
+    return "image/png" if data[:8] == b"\x89PNG\r\n\x1a\n" else "image/jpeg"
 
 
 class LedgerLine(BaseModel):
@@ -116,15 +121,16 @@ async def _generate(prompt: str, image: bytes, schema: type[BaseModel]) -> BaseM
     last: Exception | None = None
     for attempt in range(3):
         try:
-            resp = await client().aio.models.generate_content(
+            # A single slow call must not stall the demo: cap each attempt and retry.
+            resp = await asyncio.wait_for(client().aio.models.generate_content(
                 model=settings.model_extract,
-                contents=[types.Part.from_bytes(data=image, mime_type="image/jpeg"), prompt],
+                contents=[types.Part.from_bytes(data=image, mime_type=_mime(image)), prompt],
                 config=cfg,
-            )
+            ), timeout=CALL_TIMEOUT_S)
             if resp.parsed is not None:
                 return resp.parsed
             return schema.model_validate_json(resp.text)
-        except Exception as exc:  # noqa: BLE001 - retried, then surfaced as an agent error
+        except (Exception, asyncio.TimeoutError) as exc:  # noqa: BLE001 - retried, then surfaced as an agent error
             last = exc
             log.warning("extract attempt failed", extra={"attempt": attempt + 1, "error": str(exc)[:300]})
             await asyncio.sleep(1.5 * (attempt + 1))

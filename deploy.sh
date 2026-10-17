@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Provision and deploy Bukti to Cloud Run. Idempotent: safe to re-run.
-# Usage: ./deploy.sh            (uses gcloud config in $CLOUDSDK_CONFIG, default ~/.config/gcloud-bukti)
+# Usage: ./deploy.sh [infra]    (infra = provision only; uses gcloud config in $CLOUDSDK_CONFIG, default ~/.config/gcloud-bukti)
 set -euo pipefail
 
 export CLOUDSDK_CONFIG="${CLOUDSDK_CONFIG:-$HOME/.config/gcloud-bukti}"
@@ -40,6 +40,8 @@ bq --project_id "$PROJECT" --location "$REGION" show "$DATASET" >/dev/null 2>&1 
 bq --project_id "$PROJECT" --location "$REGION" load --replace --source_format=CSV --skip_leading_rows=1 \
   "$DATASET.peer_benchmarks" data/benchmarks/peer_benchmarks.csv \
   market:STRING,sector:STRING,region:STRING,median_daily_sales:INT64,share_p25:FLOAT64,share_p75:FLOAT64,n_shops:INT64,source:STRING
+
+if [[ "${1:-}" == "infra" ]]; then echo "==> Infra ready (skipping Cloud Run deploy)"; exit 0; fi
 
 echo "==> Cloud Run"
 gc run deploy "$SERVICE" --source . --region "$REGION" --service-account "$SA" \

@@ -9,6 +9,7 @@ import json
 import logging
 import sys
 import wave
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, WebSocket
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
@@ -40,7 +41,25 @@ handler.setFormatter(JsonFormatter())
 logging.basicConfig(level=logging.INFO, handlers=[handler], force=True)
 log = logging.getLogger("bukti.api")
 
-app = FastAPI(title="Bukti", version="0.1.0")
+async def _warm_models() -> None:
+    """First calls to a model from a fresh process can take minutes; pay that cost before a judge arrives."""
+    async def ping(model: str) -> None:
+        try:
+            await client().aio.models.generate_content(model=model, contents="ok")
+            log.info("model warm", extra={"agent": model})
+        except Exception as exc:  # noqa: BLE001
+            log.warning("model warm-up failed", extra={"agent": model, "error": str(exc)[:200]})
+    await asyncio.gather(ping(settings.model_extract), ping(settings.model_memo))
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    task = asyncio.create_task(_warm_models())
+    yield
+    task.cancel()
+
+
+app = FastAPI(title="Bukti", version="0.1.0", lifespan=lifespan)
 
 
 async def _app_or_404(app_id: str) -> Application:
@@ -237,8 +256,9 @@ async def _tts(text: str, lang: str) -> bytes:
                 voice_config=types.VoiceConfig(prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=VOICE[lang]))),
         ),
     )
-    pcm = resp.candidates[0].content.parts[0].inline_data.data
-    wav = _wav(pcm)
+    blob = resp.candidates[0].content.parts[0].inline_data
+    # Newer TTS models return a complete WAV; older ones return raw 24 kHz PCM.
+    wav = blob.data if (blob.mime_type or "").startswith("audio/wav") or blob.data[:4] == b"RIFF" else _wav(blob.data)
     cache.parent.mkdir(parents=True, exist_ok=True)
     cache.write_bytes(wav)
     return wav
