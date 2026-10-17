@@ -121,6 +121,10 @@ applicant packs (genuine, inflated, fabricated) handwritten by our team in Bahas
 | Container | Trivy image scan (fixable HIGH/CRITICAL fail the build), Trivy Dockerfile config scan |
 | Code quality | SonarQube quality gate (self-hosted on Cloud Run + Cloud SQL, `infra/sonarqube/`) |
 
+Latest results: 14 tests pass; Semgrep 0 findings (268 rules); gitleaks clean over the full history; pip-audit and npm
+audit 0 known vulnerabilities; Trivy 0 fixable HIGH/CRITICAL in the image; SonarQube quality gate passed (0 bugs,
+reliability A, maintainability A, 0.3% duplication over ~10k lines).
+
 On `main`, the exact image that was scanned is pushed by digest, deployed to Cloud Run, smoke-tested, and traffic is
 rolled back automatically if the smoke test fails.
 
