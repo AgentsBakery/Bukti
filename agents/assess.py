@@ -9,9 +9,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 from contextlib import asynccontextmanager
 from datetime import date, timedelta
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 from google.adk.agents import BaseAgent, InvocationContext, LlmAgent
 from google.adk.agents.readonly_context import ReadonlyContext
@@ -29,6 +30,7 @@ from app.store import store
 
 log = logging.getLogger("bukti.assess")
 MEMO_TIMEOUT_S = 120
+_IDENT = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 _BENCH_CACHE: dict[str, tuple] = {}  # benchmarks change rarely; one BigQuery read per market per instance
 
 
@@ -95,8 +97,12 @@ class BenchmarkAgent(StepAgent):
                 from google.cloud import bigquery
 
                 bq = bigquery.Client(project=settings.project)
-                sql = (f"SELECT share_p25, share_p75, median_daily_sales, n_shops FROM `{settings.project}."
-                       f"{settings.bq_dataset}.peer_benchmarks` WHERE market = @market ORDER BY n_shops DESC LIMIT 1")
+                # Table identifiers come from deployment config, never from requests; validate them anyway.
+                if not (_IDENT.match(settings.project) and _IDENT.match(settings.bq_dataset)):
+                    raise ValueError("invalid BigQuery identifiers in configuration")
+                table = f"`{settings.project}.{settings.bq_dataset}.peer_benchmarks`"
+                sql = ("SELECT share_p25, share_p75, median_daily_sales, n_shops FROM " + table  # noqa: S608  # nosec B608
+                       + " WHERE market = @market ORDER BY n_shops DESC LIMIT 1")
                 job = bq.query(sql, job_config=bigquery.QueryJobConfig(
                     query_parameters=[bigquery.ScalarQueryParameter("market", "STRING", app.market)]))
                 rows = list(job.result())

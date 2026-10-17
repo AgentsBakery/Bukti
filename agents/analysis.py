@@ -39,7 +39,7 @@ def _pearson(xs: list[float], ys: list[float]) -> float:
     if len(xs) < 3 or len(set(xs)) < 2 or len(set(ys)) < 2:
         return 0.0
     mx, my = statistics.fmean(xs), statistics.fmean(ys)
-    num = sum((x - mx) * (y - my) for x, y in zip(xs, ys))
+    num = sum((x - mx) * (y - my) for x, y in zip(xs, ys, strict=True))
     den = math.sqrt(sum((x - mx) ** 2 for x in xs) * sum((y - my) ** 2 for y in ys))
     return num / den if den else 0.0
 
@@ -281,7 +281,7 @@ def cashflow_schedule(principal: int, rate_total: float, tenor: int, pattern: li
         amounts[k] += delta
         diff -= delta
         i += 1
-    return [ScheduleItem(week=i + 1, due_date=d.isoformat(), amount=a) for i, (d, a) in enumerate(zip(dues, amounts))]
+    return [ScheduleItem(week=i + 1, due_date=d.isoformat(), amount=a) for i, (d, a) in enumerate(zip(dues, amounts, strict=True))]
 
 
 def build_metrics(stats: dict, purchases_total: int, sizing: dict, share_band: tuple[float, float],

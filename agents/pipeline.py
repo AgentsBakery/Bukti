@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import logging
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 from google.adk.agents import ParallelAgent, SequentialAgent
 from google.adk.runners import Runner

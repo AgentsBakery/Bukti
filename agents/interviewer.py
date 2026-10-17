@@ -184,7 +184,7 @@ async def run_interview(ws: WebSocket, app: Application, lang: str) -> None:
                                   run_config=run_config)
             try:
                 first = await asyncio.wait_for(anext(gen), timeout=FIRST_EVENT_TIMEOUT_S)
-            except (asyncio.TimeoutError, StopAsyncIteration):
+            except (TimeoutError, StopAsyncIteration):
                 log.warning("live session silent; reconnecting", extra={"app_id": app_id, "attempt": attempt + 1})
                 with contextlib.suppress(Exception):
                     await gen.aclose()

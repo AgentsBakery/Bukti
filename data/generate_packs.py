@@ -254,7 +254,7 @@ def render_statement(pack: Pack, out: Path) -> None:
     y += 20
     cols = [60, 420, 760]
     draw.rectangle([40, y - 8, W - 40, y + 36], fill="#eef1f7")
-    for x, h in zip(cols, ["Date", "Transactions", f"Total received ({m.currency})"]):
+    for x, h in zip(cols, ["Date", "Transactions", f"Total received ({m.currency})"], strict=True):
         draw.text((x, y), h, font=f_head, fill="#20304f")
     y += 50
     for row in pack.statement:

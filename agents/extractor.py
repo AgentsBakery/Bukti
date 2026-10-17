@@ -12,7 +12,7 @@ import json
 import logging
 import re
 from datetime import date
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 from google.adk.agents import BaseAgent, InvocationContext
 from google.adk.events import Event
@@ -144,8 +144,8 @@ async def _generate(prompt: str, image: bytes, schema: type[BaseModel]) -> BaseM
             winners = [t for t in done if not t.exception()]
             if winners:
                 return winners[0].result()
-            raise next(iter(done)).exception() if done else asyncio.TimeoutError()
-        except (Exception, asyncio.TimeoutError) as exc:  # noqa: BLE001 - retried, then surfaced as an agent error
+            raise next(iter(done)).exception() if done else TimeoutError()
+        except (TimeoutError, Exception) as exc:  # noqa: BLE001 - retried, then surfaced as an agent error
             last = exc
             log.warning("extract attempt failed", extra={"attempt": attempt + 1, "error": str(exc)[:300]})
             await asyncio.sleep(1.5 * (attempt + 1))

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -28,7 +29,7 @@ class Settings:
 
     data_dir: Path = ROOT / "data"
     web_dist: Path = ROOT / "web" / "dist"
-    cache_dir: Path = Path(os.getenv("BUKTI_CACHE_DIR", "/tmp/bukti"))
+    cache_dir: Path = Path(os.getenv("BUKTI_CACHE_DIR", os.path.join(tempfile.gettempdir(), "bukti")))
 
 
 settings = Settings()
