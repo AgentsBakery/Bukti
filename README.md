@@ -17,6 +17,11 @@ festival stock, because none of that counts as a financial statement.
 
 Theme: **BFSI — Intelligent Risk, Fraud & Financial Experiences** (Google Cloud AI Builder Cup JAPAC 2026).
 
+**Live demo:** https://bukti-474706728997.asia-southeast1.run.app (no login needed)
+
+**Docs:** [Architecture & diagrams](docs/ARCHITECTURE.md) · [How to test](docs/TESTING.md) ·
+[Costs](docs/COSTS.md) · [Operations](docs/OPERATIONS.md) · [API contract](docs/CONTRACT.md)
+
 ## Why it matters
 
 - Southeast Asia's MSME credit shortfall is estimated at roughly US$430B, with Indonesia alone around
@@ -57,6 +62,11 @@ flowchart LR
 | Integrity | Round-number test, too-regular entries, re-used photos (perceptual hash) | deterministic (ADK custom agent) |
 | Policy | Verified sales → net cash → affordable loan; repayments shaped to the shop's month | deterministic (ADK custom agent) |
 | Memo | Explains the decision for the officer and, in the borrower's language, for the borrower; cites evidence ids | Gemini 4 Argon (ADK `LlmAgent`, output schema) |
+| Officer Copilot | Answers the officer's questions about one case with read-only tools and highlights the evidence on the photo | Gemini 3.8 Flash (ADK `LlmAgent` + 6 tools) |
+
+Every runner carries an ADK **observability plugin**: each agent step, model call (latency, tokens, cost) and tool
+call is shown in the console's run log and written to BigQuery (`bukti.events`); every log line also reaches
+BigQuery through a Cloud Logging sink. Optional **Google sign-in** (Firebase Auth) stores users in Firestore.
 
 **Gemini reads and explains; rules decide; a human approves.** The memo model never sets a number.
 

@@ -27,12 +27,14 @@ log = logging.getLogger("bukti.events")
 current_app_id: contextvars.ContextVar[str | None] = contextvars.ContextVar("app_id", default=None)
 current_user_id: contextvars.ContextVar[str | None] = contextvars.ContextVar("user_id", default=None)
 
-# USD per 1M tokens (input, output). Override with BUKTI_PRICES='{"model": [in, out]}'. See docs/COSTS.md.
+# USD per 1M tokens (input, output), Gemini Enterprise Agent Platform list prices checked 2026-10-17.
+# Flash/TTS intro prices run to 2026-12-31 and Argon's to 2026-11-30 (they then double). Live is priced at its
+# audio rates (it is billed non-global). Override with BUKTI_PRICES='{"model": [in, out]}'. See docs/COSTS.md.
 PRICES: dict[str, tuple[float, float]] = {
-    "gemini-3.8-flash": (0.50, 3.00),
+    "gemini-3.8-flash": (0.75, 3.75),
     "gemini-4-argon": (2.00, 10.00),
     "gemini-3.8-live": (3.00, 12.00),
-    "gemini-3.8-flash-tts": (0.50, 10.00),
+    "gemini-3.8-flash-tts": (0.50, 9.00),
 }
 PRICES.update({k: tuple(v) for k, v in json.loads(os.getenv("BUKTI_PRICES", "{}")).items()})
 

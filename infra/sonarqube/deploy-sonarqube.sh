@@ -15,6 +15,8 @@ REPO="${REPO:-AgentsBakery/Bukti}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 gc() { gcloud --project "$PROJECT" --quiet "$@"; }
 rand() { python3 -c 'import secrets; print(secrets.token_urlsafe(24))'; }
+# SonarQube requires upper, lower, digit and a special character.
+admin_pw() { python3 -c 'import secrets; print(secrets.token_urlsafe(20) + "Aa9#")'; }
 
 echo "==> Database and user"
 gc sql databases describe sonarqube --instance "$DB_INSTANCE" >/dev/null 2>&1 || gc sql databases create sonarqube --instance "$DB_INSTANCE"
@@ -49,7 +51,7 @@ done
 
 echo "==> Admin password, project, CI token"
 if ! gc secrets describe sonar-admin-password >/dev/null 2>&1; then
-  admin=$(rand)
+  admin=$(admin_pw)
   factory="admin"  # SonarQube's public factory default, replaced immediately below
   curl -fsS --user "admin:${factory}" -X POST "$URL/api/users/change_password" \
     --data-urlencode "login=admin" --data-urlencode "previousPassword=${factory}" --data-urlencode "password=$admin"
