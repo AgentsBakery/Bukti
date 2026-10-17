@@ -255,6 +255,7 @@ export type RunEventType =
   | 'copilot.question'
   | 'decision.made'
   | 'guardrail.blocked'
+  | 'guardrail.fallback'
 
 /** Contract name: `Event`. Renamed here so it doesn't shadow the DOM's Event. */
 export interface RunEvent {

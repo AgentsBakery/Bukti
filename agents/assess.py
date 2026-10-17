@@ -23,13 +23,14 @@ from pydantic import BaseModel, Field
 
 from agents import analysis, shield, verifier
 from agents.extractor import sse
+from app import telemetry
 from app.config import settings
 from app.genai import adk_client_kwargs
 from app.schemas import Application, Check, Memo, Ref, now_iso
 from app.store import store
 
 log = logging.getLogger("bukti.assess")
-MEMO_TIMEOUT_S = 120
+MEMO_BUDGETS_S = (70, 40)  # Argon, then Flash; the rules-only memo needs no model
 _IDENT = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 _BENCH_CACHE: dict[str, tuple] = {}  # benchmarks change rarely; one BigQuery read per market per instance
 
@@ -195,12 +196,20 @@ class PolicyAgent(StepAgent):
         ctx.session.state["sizing"]["schedule"] = [s.model_dump() for s in sizing["schedule"]]
         ctx.session.state["sizing"]["citations"] = [c.model_dump() for c in sizing["citations"]]
         cur = app.currency
+        results = {c.id: c.result for c in app.checks}
+        purpose_fail, interview_fail = results.get("chk_purpose") == "fail", results.get("chk_interview") == "fail"
+        if sizing["schedule"]:
+            afford_result, afford_summary = "pass", (
+                f"Largest weekly installment {cur} {max(s.amount for s in sizing['schedule']):,} stays within 30% "
+                f"of that week's verified net cash.")
+        elif sizing["decision"] == "decline" and purpose_fail:
+            afford_result, afford_summary = "warn", "Not assessed: the stated loan purpose is outside policy (§1.3)."
+        elif sizing["decision"] == "decline":
+            afford_result, afford_summary = "fail", "Verified cash flow supports less than the minimum first loan."
+        else:
+            afford_result, afford_summary = "warn", "No offer is made until a loan officer reviews the flags."
         afford = Check(
-            id="chk_afford", agent="policy", name="Affordability",
-            result="pass" if sizing["amount"] else ("fail" if sizing["decision"] == "decline" else "warn"),
-            summary=(f"Largest weekly installment {cur} {max(s.amount for s in sizing['schedule']):,} stays within 30% "
-                     f"of that week's verified net cash." if sizing["schedule"] else
-                     "No offer is made until a loan officer reviews the flags."),
+            id="chk_afford", agent="policy", name="Affordability", result=afford_result, summary=afford_summary,
             detail=(f"Verified monthly sales {cur} {sizing['verified_monthly_sales']:,}; estimated margin "
                     f"{sizing['margin']:.0%}; net monthly cash {cur} {sizing['net_monthly_cashflow']:,}."),
             evidence_refs=["chk_share"])
@@ -208,7 +217,9 @@ class PolicyAgent(StepAgent):
             app.metrics = metrics
             _upsert_checks(app, [afford])
         verdict = {"approve": "within policy", "approve_reduced": "reduced to verified sales",
-                   "refer": "refer to a loan officer", "decline": "below minimum loan"}[sizing["decision"]]
+                   "refer": "refer to a loan officer" + (": interview contradicts the evidence" if interview_fail else ""),
+                   "decline": "decline: not a business use (§1.3)" if purpose_fail else "below minimum loan",
+                   }[sizing["decision"]]
         return (f"{cur} {sizing['amount']:,} over {sizing['tenor_weeks']} weeks, {verdict}" if sizing["amount"]
                 else verdict.capitalize(),
                 [{"type": "metrics", "metrics": metrics.model_dump()}, {"type": "check", "check": afford.model_dump()}])
@@ -269,11 +280,15 @@ Write:
 Never mention gender, religion, ethnicity, age or marital status."""
 
 
-def build_memo_writer() -> LlmAgent:
+def build_memo_writer(model: str, name: str, call_timeout_ms: int) -> LlmAgent:
+    # A per-request timeout: a hung connection fails and is retried instead of stalling the whole budget.
     return LlmAgent(
-        name="memo_writer",
-        model=Gemini(model=settings.model_memo, client_kwargs=adk_client_kwargs(),
-                     retry_options=types.HttpRetryOptions(attempts=3)),
+        name=name,
+        model=Gemini(model=model, client_kwargs={
+            **adk_client_kwargs(),
+            "http_options": types.HttpOptions(timeout=call_timeout_ms,
+                                              retry_options=types.HttpRetryOptions(attempts=2)),
+        }),
         instruction=memo_instruction,
         include_contents="none",
         output_schema=MemoDraft,
@@ -298,18 +313,24 @@ class MemoAgent(BaseAgent):
         await _start(app_id, "memo", "Writing the credit memo")
         yield sse(self.name, ctx, {"type": "agent", "agent": "memo", "status": "running",
                                    "summary": "Writing the credit memo"})
-        writer = self.sub_agents[0]
         status = "done"
-        try:
-            async with asyncio.timeout(MEMO_TIMEOUT_S):
-                async for ev in writer.run_async(ctx):
-                    yield ev
-            draft = MemoDraft.model_validate(ctx.session.state.get("memo_draft") or {})
-            model = settings.model_memo
-        except (Exception, TimeoutError):  # noqa: BLE001
-            log.exception("memo writer failed; using rule-based memo", extra={"app_id": app_id})
+        draft, model = None, "rules-only"
+        # Gemini 4 Argon first; if it fails or runs out of time, Gemini 3.8 Flash; then a rules-only memo.
+        for writer, budget in zip(self.sub_agents, MEMO_BUDGETS_S, strict=True):
+            try:
+                async with asyncio.timeout(budget):
+                    async for ev in writer.run_async(ctx):
+                        yield ev
+                draft = MemoDraft.model_validate(ctx.session.state.get("memo_draft") or {})
+                model = writer.model.model
+                break
+            except (Exception, TimeoutError):  # noqa: BLE001 - fall through to the next writer
+                log.warning("memo writer failed", extra={"app_id": app_id, "writer": writer.name}, exc_info=True)
+                telemetry.emit("guardrail.fallback", agent="memo", status="fallback",
+                               detail=f"{writer.name} failed or exceeded {budget}s")
+        if draft is None:
             app = await store.get(app_id)
-            draft, model, status = fallback_draft(app, ctx.session.state.get("sizing", {})), "rules-only", "done"
+            draft = fallback_draft(app, ctx.session.state.get("sizing", {}))
         sizing = ctx.session.state.get("sizing", {})
         memo = Memo(
             decision=sizing.get("decision", "refer"), amount=sizing.get("amount", 0),

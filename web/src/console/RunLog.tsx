@@ -51,6 +51,7 @@ const KIND: Record<RunEventType, { label: string; Icon: typeof Play; tone: 'ink'
   'copilot.question': { label: 'Copilot', Icon: MessagesSquare, tone: 'ink' },
   'decision.made': { label: 'Decision', Icon: Gavel, tone: 'leaf' },
   'guardrail.blocked': { label: 'Guardrail', Icon: ShieldAlert, tone: 'chili' },
+  'guardrail.fallback': { label: 'Fallback', Icon: ShieldAlert, tone: 'turmeric' },
 }
 
 const FILTERS = [

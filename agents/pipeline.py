@@ -18,6 +18,7 @@ from agents.assess import (BenchmarkAgent, IntegrityAgent, InterviewVerifierAgen
                            ReconcilerAgent, build_memo_writer)
 from agents.extractor import ExtractorAgent
 from agents.observability import ObservabilityPlugin
+from app.config import settings
 
 log = logging.getLogger("bukti.pipeline")
 APP_NAME = "bukti"
@@ -41,7 +42,9 @@ def build_assess_stage() -> SequentialAgent:
                 InterviewVerifierAgent(name="verifier", description="Interview answers vs evidence and loan purpose"),
             ]),
             PolicyAgent(name="policy", description="Affordability and cash-flow-shaped repayment"),
-            MemoAgent(name="memo", description="Explains the decision", sub_agents=[build_memo_writer()]),
+            MemoAgent(name="memo", description="Explains the decision", sub_agents=[
+                build_memo_writer(settings.model_memo, "memo_writer", 60_000),
+                build_memo_writer(settings.model_extract, "memo_writer_fast", 30_000)]),
         ],
     )
 
