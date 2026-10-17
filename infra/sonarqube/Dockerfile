@@ -10,4 +10,7 @@ ENV SONAR_SEARCH_JAVAADDITIONALOPTS="-Dnode.store.allow_mmap=false" \
     SONAR_JDBC_USERNAME="sonar" \
     SONAR_TELEMETRY_ENABLE="false"
 
+# The official image already runs as the unprivileged sonarqube user; state it explicitly.
+USER sonarqube
+
 EXPOSE 9000

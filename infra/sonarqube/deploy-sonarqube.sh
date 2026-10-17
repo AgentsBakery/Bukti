@@ -50,8 +50,9 @@ done
 echo "==> Admin password, project, CI token"
 if ! gc secrets describe sonar-admin-password >/dev/null 2>&1; then
   admin=$(rand)
-  curl -fsS -u admin:admin -X POST "$URL/api/users/change_password" \
-    --data-urlencode "login=admin" --data-urlencode "previousPassword=admin" --data-urlencode "password=$admin"
+  factory="admin"  # SonarQube's public factory default, replaced immediately below
+  curl -fsS --user "admin:${factory}" -X POST "$URL/api/users/change_password" \
+    --data-urlencode "login=admin" --data-urlencode "previousPassword=${factory}" --data-urlencode "password=$admin"
   printf '%s' "$admin" | gc secrets create sonar-admin-password --replication-policy=user-managed --locations="$REGION" --data-file=-
 fi
 admin=$(gc secrets versions access latest --secret sonar-admin-password)

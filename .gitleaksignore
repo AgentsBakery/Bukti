@@ -1,0 +1,2 @@
+# SonarQube factory default (admin/admin) in deploy-sonarqube.sh; it is public and rotated into Secret Manager on first boot.
+a17eb9bfeb06fa312a7d418ecff73f4c810a622e:infra/sonarqube/deploy-sonarqube.sh:curl-auth-user:53
