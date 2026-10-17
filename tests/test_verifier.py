@@ -90,3 +90,11 @@ def test_skipped_interview_does_not_change_the_decision():
     checks, sizing = decide(app, None)
     assert next(c for c in checks if c.id == "chk_purpose").result == "warn"
     assert sizing["decision"] == "approve"
+
+
+def test_placeholder_facts_are_rejected():
+    from agents.interviewer import is_placeholder
+    assert is_placeholder("[Waiting for user response]", "[Waiting for user response]")
+    assert is_placeholder("for partying", "")
+    assert not is_placeholder("unanswered", "I sell apples and bananas.")
+    assert not is_placeholder("Rp 450.000 on a normal day", "Sekitar empat ratus lima puluh ribu")

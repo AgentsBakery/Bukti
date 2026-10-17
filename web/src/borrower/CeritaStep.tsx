@@ -104,7 +104,8 @@ export function CeritaStep() {
             })
             if (tr.final) setFinals((f) => [...f.slice(-4), tr.text])
           },
-          onFact: (f) => setFacts((prev) => (prev.some((x) => x.id === f.id) ? prev : [...prev, f])),
+          // A re-asked question re-records its field: replace that chip rather than adding a second one.
+          onFact: (f) => setFacts((prev) => [...prev.filter((x) => x.id !== f.id && (f.field === 'other' || x.field !== f.field)), f]),
           onSpeaking: setAgentSpeaking,
           onInterrupted: () => setAgentSpeaking(false),
           onDone: (fs) => {

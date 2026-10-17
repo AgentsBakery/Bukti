@@ -37,6 +37,19 @@ _fact_queues: dict[str, asyncio.Queue] = defaultdict(asyncio.Queue)
 _ended: dict[str, bool] = {}
 
 
+_PLACEHOLDER_WORDS = ("waiting for", "no response yet", "not yet answered", "to be confirmed")
+
+
+def is_placeholder(value: str, quote: str) -> bool:
+    """True for a fact recorded before the borrower answered, e.g. value "[Waiting for user response]"."""
+    for text in (value.strip(), quote.strip()):
+        if not text or (text[0] in "[(<{" and text[-1] in "])>}"):
+            return True
+        if any(w in text.lower() for w in _PLACEHOLDER_WORDS):
+            return True
+    return False
+
+
 async def record_fact(field: str, label: str, value: str, quote: str, tool_context: ToolContext) -> dict:
     """Save one answer from the borrower as a structured fact.
 
@@ -51,6 +64,9 @@ async def record_fact(field: str, label: str, value: str, quote: str, tool_conte
         {"status": "saved", "fact_id": ...} or {"status": "error", "message": ...}.
     """
     app_id = tool_context.state.get("app_id")
+    if is_placeholder(value, quote):
+        return {"status": "error", "message": "The borrower has not answered yet. Wait for their answer, then record "
+                                              "what they actually said."}
     try:
         fact = Fact(id=new_id("fact"), field=field[:40], label=label[:60], value=value[:160], quote=quote[:300],
                     ts=now_iso())
@@ -123,6 +139,7 @@ Rules for answers:
 - If an answer does not answer the question (for example they name products when you asked for an amount, joke, or
   change the subject), politely re-ask ONCE in simpler words. If the second answer still does not answer it, call
   record_fact with value "unanswered" and their words as the quote, then move on.
+- Call record_fact only AFTER the borrower has answered, never before, and never with a placeholder.
 - Record what they actually said, never what you hoped to hear. Keep their exact words in the quote.
 - Do not argue, judge or warn them about their answers; the loan officer reviews everything.
 Never promise approval, never mention a loan amount, and never ask about religion, ethnicity, marital status or age.

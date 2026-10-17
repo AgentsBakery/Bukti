@@ -309,22 +309,26 @@ def _wav(pcm: bytes, rate: int = 24000) -> bytes:
     return buf.getvalue()
 
 
+TTS_TIMEOUT_S = 30
+
+
 async def _tts(text: str, lang: str) -> bytes:
-    key = hashlib.sha256(f"{settings.model_tts}:{lang}:{text}".encode()).hexdigest()[:24]
+    key = hashlib.sha256(f"v2:{settings.model_tts}:{lang}:{text}".encode()).hexdigest()[:24]
     cache = settings.cache_dir / "tts" / f"{key}.wav"
     if cache.exists():
         return cache.read_bytes()
     started = asyncio.get_running_loop().time()
-    resp = await client().aio.models.generate_content(
+    # Plain text only: the TTS model reads any style instruction in `contents` aloud.
+    resp = await asyncio.wait_for(client().aio.models.generate_content(
         model=settings.model_tts,
-        contents=f"Say warmly and slowly, like a kind shopkeeper's neighbour: {text}",
+        contents=text,
         config=types.GenerateContentConfig(
             response_modalities=["AUDIO"],
             speech_config=types.SpeechConfig(
                 language_code=LANG_CODE[lang],
                 voice_config=types.VoiceConfig(prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=VOICE[lang]))),
         ),
-    )
+    ), timeout=TTS_TIMEOUT_S)
     usage = resp.usage_metadata
     telemetry.emit("model.call", agent="tts", model=settings.model_tts,
                    latency_ms=int((asyncio.get_running_loop().time() - started) * 1000),
