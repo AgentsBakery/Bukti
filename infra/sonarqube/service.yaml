@@ -1,0 +1,63 @@
+# Cloud Run service: SonarQube + Cloud SQL Auth Proxy sidecar. Applied by deploy-sonarqube.sh,
+# which fills in ${PROJECT}, ${REGION}, ${IMAGE} and ${INSTANCE}.
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: bukti-sonarqube
+  annotations:
+    run.googleapis.com/launch-stage: GA
+    run.googleapis.com/invoker-iam-disabled: "true"
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: "0"
+        autoscaling.knative.dev/maxScale: "1"
+        run.googleapis.com/cpu-throttling: "false"
+        run.googleapis.com/startup-cpu-boost: "true"
+        run.googleapis.com/execution-environment: gen2
+        run.googleapis.com/container-dependencies: '{"sonarqube":["cloud-sql-proxy"]}'
+    spec:
+      serviceAccountName: bukti-sonar@${PROJECT}.iam.gserviceaccount.com
+      timeoutSeconds: 900
+      containerConcurrency: 40
+      containers:
+        - name: sonarqube
+          image: ${IMAGE}
+          ports:
+            - containerPort: 9000
+          env:
+            - name: SONAR_JDBC_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sonar-db-password
+                  key: latest
+          resources:
+            limits:
+              cpu: "2"
+              memory: 6Gi
+          startupProbe:
+            tcpSocket:
+              port: 9000
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 36
+        - name: cloud-sql-proxy
+          image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.26.2
+          args:
+            - --port=5432
+            - --structured-logs
+            - --health-check
+            - --http-address=0.0.0.0
+            - ${INSTANCE}
+          startupProbe:
+            httpGet:
+              path: /startup
+              port: 9090
+            periodSeconds: 2
+            failureThreshold: 30
+          resources:
+            limits:
+              cpu: "1"
+              memory: 512Mi

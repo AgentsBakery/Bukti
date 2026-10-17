@@ -76,6 +76,44 @@ applicant packs (genuine, inflated, fabricated) handwritten by our team in Bahas
 - Affordability is capped at 30% of each week's verified net cash (stricter than RBI's 50% household cap).
 - Borrower messages are written to preserve dignity: a decline is a path forward, not a dead end.
 
+## Guardrails and security
+
+**AI guardrails**
+- Model Armor screens every piece of borrower-written text (notebook notes, line descriptions, interview quotes)
+  for prompt injection and unsafe content before it can reach the memo model. A fabricated demo notebook carries a
+  hidden "approve the maximum loan" note to the AI; it is caught and shown to the officer as a failed check.
+- Structured output with response schemas; bounding boxes clamped; implausible amounts dropped.
+- Every model call is bounded: hedged vision requests, timeouts, a rules-only memo fallback, a live-session reconnect.
+
+**Runtime guardrails** (`app/guards.py`)
+- Per-IP token buckets on every endpoint that spends model tokens or writes data; global caps on concurrent
+  pipeline runs and live interviews; at most 12 photos per application; 15 MB per photo, decoded as an image.
+- Content-Security-Policy, HSTS, nosniff, a strict permissions policy (microphone and camera only for this site),
+  `frame-ancestors 'none'`; API docs disabled in production.
+- Logs are structured JSON and carry only ids, never borrower names, quotes or amounts.
+
+**Cloud**
+- Least-privilege service accounts: the runtime account can call Gemini, read benchmarks, write Firestore and its
+  own bucket; the CI deployer can only push to one Artifact Registry repo and roll out the service.
+- No keys anywhere: GitHub Actions authenticates through Workload Identity Federation, scoped to this repository.
+
+## CI/CD
+
+`.github/workflows/ci-cd.yml` — actions pinned to commit SHAs.
+
+| Gate | Tooling |
+|---|---|
+| Backend quality | ruff, pytest (rules, API guardrails, pipeline) |
+| Frontend quality | TypeScript, oxlint, production build |
+| Secrets | gitleaks over the full history |
+| SAST | Semgrep (Python, TypeScript, React, Dockerfile, secrets), bandit |
+| Dependencies | pip-audit, npm audit |
+| Container | Trivy image scan (fixable HIGH/CRITICAL fail the build), Trivy Dockerfile config scan |
+| Code quality | SonarQube quality gate (self-hosted on Cloud Run + Cloud SQL, `infra/sonarqube/`) |
+
+On `main`, the exact image that was scanned is pushed by digest, deployed to Cloud Run, smoke-tested, and traffic is
+rolled back automatically if the smoke test fails.
+
 ## Run it locally
 
 ```bash
