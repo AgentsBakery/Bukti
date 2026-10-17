@@ -30,6 +30,7 @@ PROMPT_VERSION = "ledger-v4"
 CALL_TIMEOUT_S = 60
 HEDGE_AFTER_S = 22
 MIN_SCAN_S = 3.0
+MAX_LINE_AMOUNT = {"ID": 500_000_000, "IN": 5_000_000}
 
 
 def _mime(data: bytes) -> str:
@@ -184,6 +185,10 @@ async def read_ledger(app: Application, ev: Evidence, period: tuple[str, str]) -
         last_date = d
         if not (ln.get("amount_in") or ln.get("amount_out")):
             continue
+        # Guardrail: a misread digit can turn Rp 450.000 into 450 billion; drop implausible lines.
+        if max(int(ln.get("amount_in") or 0), int(ln.get("amount_out") or 0)) > MAX_LINE_AMOUNT[app.market]:
+            log.warning("implausible amount dropped", extra={"app_id": app.id, "evidence_id": ev.id})
+            continue
         entries.append(Entry(
             id=new_id("en"), evidence_id=ev.id, date=d, description=str(ln.get("description", ""))[:80],
             amount_in=max(0, int(ln.get("amount_in") or 0)), amount_out=max(0, int(ln.get("amount_out") or 0)),
@@ -261,6 +266,11 @@ class ExtractorAgent(BaseAgent):
             for en in page_entries:
                 entries.append(en)
                 yield sse(self.name, ctx, {"type": "entry", "entry": en.model_dump()})
+            # Save each page as it lands so the officer console (which polls) fills in alongside the phone.
+            async with store.lock(app_id):
+                live_app = await store.get(app_id)
+                live_app.entries = sorted(entries, key=lambda e: (e.date, e.amount_out > 0))
+                await store.save(live_app)
 
         statement: list[StatementDay] = []
         for res in await stmt_future:

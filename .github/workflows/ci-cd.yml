@@ -1,0 +1,218 @@
+name: ci-cd
+
+# Every PR and push runs the quality and security gates. A push to main deploys the exact image
+# that was scanned, keyless via Workload Identity Federation, then smoke-tests and rolls back on failure.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  REGION: ${{ vars.GCP_REGION }}
+  IMAGE: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT }}/bukti/bukti
+  SERVICE: bukti
+
+jobs:
+  backend:
+    name: Backend (ruff, pytest, bandit, pip-audit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --frozen
+      - name: Lint
+        run: uvx ruff check app agents eval tests data/generate_packs.py --select E,F,W,B,S,UP --ignore E501,S101,S311,B008,UP017
+      - name: Tests
+        env:
+          BUKTI_WARM: "0"
+        run: uv run pytest -q
+      - name: Bandit (Python SAST)
+        run: uvx bandit -q -r app agents -ll
+      - name: pip-audit (dependency CVEs)
+        run: |
+          uv export --frozen --no-dev --no-hashes --no-emit-project > requirements.lock
+          uvx pip-audit -r requirements.lock --progress-spinner off
+
+  frontend:
+    name: Frontend (typecheck, lint, build, npm audit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run build
+      - name: npm audit (production dependencies)
+        run: npm audit --omit=dev --audit-level=high
+
+  secrets:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: gitleaks over full history
+        run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.30.0 git /repo --no-banner --redact --exit-code 1
+
+  sast:
+    name: SAST (Semgrep)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Semgrep
+        run: |
+          docker run --rm -v "$PWD:/src" semgrep/semgrep:1.160.0 semgrep scan --metrics=off \
+            --config p/python --config p/typescript --config p/react --config p/dockerfile --config p/secrets \
+            --exclude web/public --error --sarif --output /src/semgrep.sarif
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: semgrep-sarif
+          path: semgrep.sarif
+          if-no-files-found: ignore
+
+  sonarqube:
+    name: SonarQube quality gate
+    if: vars.SONAR_HOST_URL != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+        with:
+          args: >
+            -Dsonar.qualitygate.wait=true
+            -Dsonar.qualitygate.timeout=600
+
+  container:
+    name: Container (build, Trivy scan, push)
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Build image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          load: true
+          tags: bukti:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Trivy image scan (fail on fixable HIGH/CRITICAL)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: bukti:${{ github.sha }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+      - name: Trivy config scan (Dockerfile)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: config
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+      - name: Authenticate to Google Cloud (WIF, keyless)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.DEPLOY_SA }}
+      - name: Push the scanned image
+        id: push
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+          docker tag "bukti:${GITHUB_SHA}" "${IMAGE}:${GITHUB_SHA}"
+          docker push "${IMAGE}:${GITHUB_SHA}"
+          digest=$(docker inspect --format '{{index .RepoDigests 0}}' "${IMAGE}:${GITHUB_SHA}" | cut -d@ -f2)
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    name: Deploy to Cloud Run
+    needs: [backend, frontend, secrets, sast, sonarqube, container]
+    # Every gate must pass; SonarQube may be skipped when no server is configured.
+    if: >-
+      ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+      && needs.backend.result == 'success' && needs.frontend.result == 'success'
+      && needs.secrets.result == 'success' && needs.sast.result == 'success'
+      && needs.container.result == 'success'
+      && (needs.sonarqube.result == 'success' || needs.sonarqube.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.url }}
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.DEPLOY_SA }}
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+      - name: Remember the serving revision
+        id: before
+        run: |
+          rev=$(gcloud run services describe "$SERVICE" --region "$REGION" --format 'value(status.traffic[0].revisionName)')
+          echo "revision=${rev}" >> "$GITHUB_OUTPUT"
+      - name: Deploy the scanned digest
+        id: deploy
+        run: |
+          gcloud run deploy "$SERVICE" --region "$REGION" --quiet \
+            --image "${IMAGE}@${{ needs.container.outputs.digest }}" \
+            --service-account "${{ vars.RUNTIME_SA }}"
+          url=$(gcloud run services describe "$SERVICE" --region "$REGION" --format 'value(status.url)')
+          echo "url=${url}" >> "$GITHUB_OUTPUT"
+      - name: Smoke test
+        id: smoke
+        run: |
+          url="${{ steps.deploy.outputs.url }}"
+          curl -fsS --retry 5 --retry-delay 5 "$url/api/health" | grep -q '"ok":true'
+          curl -fsS "$url/" | grep -q '<div id="root">'
+          curl -fsS "$url/api/demo/packs" | grep -q '"sari"'
+          curl -fsSI "$url/" | grep -qi 'content-security-policy'
+      - name: Roll back on failed smoke test
+        if: failure() && steps.before.outputs.revision != ''
+        run: |
+          gcloud run services update-traffic "$SERVICE" --region "$REGION" \
+            --to-revisions "${{ steps.before.outputs.revision }}=100" --quiet
+          echo "::error::Smoke test failed; traffic rolled back to ${{ steps.before.outputs.revision }}"

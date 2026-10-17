@@ -27,6 +27,8 @@ class Settings:
     bq_dataset: str = os.getenv("BUKTI_BQ_DATASET", "bukti")
     use_bigquery: bool = os.getenv("BUKTI_BIGQUERY", "0") == "1"
 
+    warm_models: bool = os.getenv("BUKTI_WARM", "1") == "1"
+
     data_dir: Path = ROOT / "data"
     web_dist: Path = ROOT / "web" / "dist"
     cache_dir: Path = Path(os.getenv("BUKTI_CACHE_DIR", os.path.join(tempfile.gettempdir(), "bukti")))

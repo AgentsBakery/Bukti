@@ -11,12 +11,13 @@ import sys
 import wave
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile, WebSocket
+from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile, WebSocket
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from google.genai import types
 
 from agents.pipeline import run_stage
 from app import packs
+from app import guards
 from app.config import settings
 from app.genai import client
 from app.schemas import (Application, CreateApplication, Decision, DecisionIn, Persona, TtsIn, now_iso)
@@ -54,12 +55,13 @@ async def _warm_models() -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    task = asyncio.create_task(_warm_models())
+    task = asyncio.create_task(_warm_models() if settings.warm_models else asyncio.sleep(0))
     yield
     task.cancel()
 
 
-app = FastAPI(title="Bukti", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="Bukti", version="0.1.0", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+app.add_middleware(guards.SecurityHeaders)
 
 
 async def _app_or_404(app_id: str) -> Application:
@@ -81,7 +83,7 @@ async def demo_packs():
     return [p.model_dump() for p in packs.list_packs()]
 
 
-@app.post("/api/demo/packs/{pack_id}/load")
+@app.post("/api/demo/packs/{pack_id}/load", dependencies=[Depends(guards.rate_limit("load"))])
 async def load_pack(pack_id: str):
     if pack_id not in {p.id for p in packs.list_packs()}:
         raise HTTPException(404, "unknown pack")
@@ -90,7 +92,7 @@ async def load_pack(pack_id: str):
     return {"application_id": a.id}
 
 
-@app.post("/api/applications")
+@app.post("/api/applications", dependencies=[Depends(guards.rate_limit("load"))])
 async def create_application(body: CreateApplication):
     a = Application(
         id=new_id("app"), market=body.market, language=body.language,
@@ -113,7 +115,7 @@ async def get_application(app_id: str):
 ALLOWED_TYPES = {"ledger", "statement", "receipt", "shop"}
 
 
-@app.post("/api/applications/{app_id}/evidence")
+@app.post("/api/applications/{app_id}/evidence", dependencies=[Depends(guards.rate_limit("upload"))])
 async def upload_evidence(app_id: str, file: UploadFile = File(...), type: str = Form(...)):
     if type not in ALLOWED_TYPES:
         raise HTTPException(400, "type must be ledger, statement, receipt or shop")
@@ -121,6 +123,8 @@ async def upload_evidence(app_id: str, file: UploadFile = File(...), type: str =
     if len(data) > 15 * 1024 * 1024:
         raise HTTPException(413, "image too large")
     a = await _app_or_404(app_id)
+    if len(a.evidence) >= guards.MAX_EVIDENCE_PER_APPLICATION:
+        raise HTTPException(409, f"An application can hold at most {guards.MAX_EVIDENCE_PER_APPLICATION} photos.")
     try:
         ev = await store.add_upload(a, data, type)  # type: ignore[arg-type]
     except Exception as exc:  # noqa: BLE001
@@ -179,6 +183,8 @@ def _stream(stage: str, app_id: str, force: bool):
             replay = _replay_extract(a) if stage == "extract" else _replay_assess(a)
             async for chunk in replay:
                 yield chunk
+        elif guards.stage_slots.locked():
+            yield _sse({"type": "error", "message": "Bukti is busy with other applications. Please try again in a minute."})
         else:
             if stage == "assess":
                 a.status = "assessing"
@@ -188,8 +194,9 @@ def _stream(stage: str, app_id: str, force: bool):
                         s.status, s.summary = "done", "Interview skipped"
                 await store.save(a)
             try:
-                async for payload in run_stage(stage, app_id):
-                    yield _sse(payload)
+                async with guards.stage_slots:
+                    async for payload in run_stage(stage, app_id):
+                        yield _sse(payload)
             except Exception as exc:  # noqa: BLE001
                 log.exception("stage failed", extra={"stage": stage, "app_id": app_id})
                 yield _sse({"type": "error", "message": f"{stage} failed: {str(exc)[:200]}"})
@@ -200,17 +207,17 @@ def _stream(stage: str, app_id: str, force: bool):
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
-@app.get("/api/applications/{app_id}/extract/stream")
+@app.get("/api/applications/{app_id}/extract/stream", dependencies=[Depends(guards.rate_limit("stage"))])
 async def extract_stream(app_id: str, force: bool = False):
     return _stream("extract", app_id, force)
 
 
-@app.get("/api/applications/{app_id}/assess/stream")
+@app.get("/api/applications/{app_id}/assess/stream", dependencies=[Depends(guards.rate_limit("stage"))])
 async def assess_stream(app_id: str, force: bool = False):
     return _stream("assess", app_id, force)
 
 
-@app.post("/api/applications/{app_id}/decision")
+@app.post("/api/applications/{app_id}/decision", dependencies=[Depends(guards.rate_limit("decision"))])
 async def decide(app_id: str, body: DecisionIn):
     async with store.lock(app_id):
         a = await _app_or_404(app_id)
@@ -264,7 +271,7 @@ async def _tts(text: str, lang: str) -> bytes:
     return wav
 
 
-@app.post("/api/tts")
+@app.post("/api/tts", dependencies=[Depends(guards.rate_limit("tts"))])
 async def tts(body: TtsIn):
     try:
         return Response(await _tts(body.text, body.lang), media_type="audio/wav")
@@ -273,7 +280,7 @@ async def tts(body: TtsIn):
         raise HTTPException(503, "tts unavailable") from exc
 
 
-@app.get("/api/applications/{app_id}/explain-audio")
+@app.get("/api/applications/{app_id}/explain-audio", dependencies=[Depends(guards.rate_limit("tts"))])
 async def explain_audio(app_id: str):
     a = await _app_or_404(app_id)
     if not a.memo or not a.memo.borrower_message:
@@ -292,11 +299,16 @@ async def interview(ws: WebSocket, app_id: str, lang: str = "id"):
 
     await ws.accept()
     a = await store.get(app_id)
-    if a is None:
-        await ws.send_text(json.dumps({"type": "error", "message": "application not found"}))
+    problem = ("application not found" if a is None
+               else "Too many interviews from this device. Please wait a few minutes." if not guards.allow_ws(ws, "interview")
+               else "All interview lines are busy. Please try again in a minute." if guards.interview_slots.locked()
+               else None)
+    if problem:
+        await ws.send_text(json.dumps({"type": "error", "message": problem}))
         await ws.close()
         return
-    await run_interview(ws, a, lang if lang in ("id", "ta", "en") else a.language)
+    async with guards.interview_slots:
+        await run_interview(ws, a, lang if lang in ("id", "ta", "en") else a.language)
 
 
 # ---------- Web app ----------

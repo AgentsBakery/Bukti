@@ -32,7 +32,7 @@ def image_fingerprint(data: bytes) -> tuple[int, int, str, str]:
     img = ImageOps.exif_transpose(Image.open(io.BytesIO(data)))
     w, h = img.size
     small = img.convert("L").resize((8, 8))
-    px = list(small.getdata())
+    px = list(small.get_flattened_data() if hasattr(small, "get_flattened_data") else small.getdata())
     avg = sum(px) / len(px)
     bits = "".join("1" if p >= avg else "0" for p in px)
     return w, h, hashlib.sha256(data).hexdigest(), f"{int(bits, 2):016x}"
