@@ -158,6 +158,11 @@ def _unverified(entries: list[Entry], why: str) -> tuple[list[Check], dict]:
     return checks, stats
 
 
+def _same_lines(a: set, b: set) -> bool:
+    small = min(len(a), len(b))
+    return small >= 3 and len(a & b) / small >= 0.8
+
+
 def _ahash_distance(a: str, b: str) -> int:
     if not a or not b or len(a) != len(b):
         return 64
@@ -196,16 +201,21 @@ def integrity(market: str, entries: list[Entry], evidence: list[Evidence]) -> li
                             summary=summary, detail=f"Coefficient of variation {cv:.3f}; distinct values {distinct:.2f}.",
                             evidence_refs=[e.id for e in sales[:8]]))
 
+    # Re-used pages are judged by content, not by how a photo looks: two different notebook pages photographed on
+    # the same table look identical to a tiny perceptual hash. A notebook page counts as re-used when the lines
+    # read from it largely repeat another page's; any other file only when it is byte-for-byte the same file.
+    page_lines: dict[str, set[tuple[str, int, int]]] = defaultdict(set)
+    for en in entries:
+        page_lines[en.evidence_id].add((en.date, en.amount_in, en.amount_out))
     dupes: list[tuple[str, str]] = []
     usable = [e for e in evidence if e.status != "excluded"]
     for i, a in enumerate(usable):
         for b in usable[i + 1:]:
             if a.type != b.type or (a.parent_id and a.parent_id == b.parent_id):
-                continue  # pages of one PDF are not re-used photos of each other
+                continue  # pages of one PDF are not re-used copies of each other
             same_file = bool(a.sha256) and a.sha256 == b.sha256
-            # Printed statements all look alike to a perceptual hash; only photos are compared visually.
-            looks_same = a.type in ("ledger", "receipt", "shop") and _ahash_distance(a.ahash, b.ahash) <= 4
-            if same_file or looks_same:
+            same_page = a.type == "ledger" and _same_lines(page_lines[a.id], page_lines[b.id])
+            if same_file or same_page:
                 dupes.append((a.id, b.id))
     checks.append(Check(
         id="chk_dupes", agent="integrity", name="Re-used photos",

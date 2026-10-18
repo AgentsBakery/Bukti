@@ -30,7 +30,7 @@ from app.store import new_id, store
 
 log = logging.getLogger("bukti.extractor")
 PROMPT_VERSION = "ledger-v4"  # demo-pack pages (their reads are bundled under this key)
-UPLOAD_PROMPT_VERSION = "upload-v5"  # pages people upload
+UPLOAD_PROMPT_VERSION = "upload-v6"  # pages people upload
 CALL_TIMEOUT_S = 60
 HEDGE_AFTER_S = 22
 # Uploaded notebook pages are read with more thinking: on a real per-item sales sheet, "low" missed a column in one
@@ -59,10 +59,11 @@ class LedgerLine(BaseModel):
 
 
 class LedgerRead(BaseModel):
-    page_kind: Literal["daily_records", "period_summary", "not_records"] = Field(
+    page_kind: Literal["daily_records", "period_summary", "not_records", "unreadable"] = Field(
         default="daily_records",
         description="daily_records: rows carry calendar dates; period_summary: rows are whole months, years or "
-                    "other periods without calendar dates; not_records: not a record of this shop's sales or spending")
+                    "other periods without calendar dates; not_records: not a record of this shop's sales or spending; "
+                    "unreadable: a records page too blurry, dark or cut off to read reliably")
     reason: str = Field(default="", description="One short English sentence saying what the page shows")
     lines: list[LedgerLine]
     notes: list[str] = Field(default_factory=list,
@@ -97,7 +98,8 @@ Common layouts:
 
 Set page_kind: daily_records if rows carry calendar dates; period_summary if rows are whole months, years or other
 periods without calendar dates (then return no lines); not_records if the page is not this shop's own sales or
-spending (then return no lines). Say in `reason` what the page shows.
+spending (then return no lines); unreadable if it is a records page but too blurry, dark or cut off to read the
+numbers reliably (then return only lines you can read with confidence, or none). Say in `reason` what the page shows.
 
 Read amounts exactly as integers:
 - Indonesia writes thousands with dots: "463.500" = 463500. "450rb" or "450 rb" = 450000. "1,2jt" = 1200000.

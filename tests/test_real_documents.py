@@ -72,19 +72,25 @@ def test_short_notebook_weeks_are_neutral():
     assert analysis.weekly_pattern(points, use="ledger") == [1.0, 1.0, 1.0, 1.0]
 
 
-def test_pages_of_one_pdf_and_lookalike_statements_are_not_duplicates():
+def test_reused_pages_are_judged_by_content_not_looks():
     from app.schemas import Evidence
 
-    def ev(i, kind, ahash, sha, parent=None):
-        return Evidence(id=f"ev{i}", type=kind, label="x", url="", width=1, height=1, sha256=sha, ahash=ahash, parent_id=parent)
+    def ev(i, kind, sha, parent=None):
+        # every page carries the same perceptual hash: photos on one table look alike at 8x8
+        return Evidence(id=f"ev{i}", type=kind, label="x", url="", width=1, height=1, sha256=sha, ahash="ffff0000ffff0000",
+                        parent_id=parent)
 
-    same_pdf = [ev(1, "statement", "ffff0000ffff0000", "a", "doc1"), ev(2, "statement", "ffff0000ffff0000", "b", "doc1")]
-    two_statements = [ev(3, "statement", "ffff0000ffff0000", "c"), ev(4, "statement", "ffff0000ffff0001", "d")]
-    reused_photo = [ev(5, "ledger", "0f0f0f0f0f0f0f0f", "e"), ev(6, "ledger", "0f0f0f0f0f0f0f0e", "f")]
-    dupes = lambda evs: next(c for c in analysis.integrity("ID", [], evs) if c.id == "chk_dupes").result  # noqa: E731
-    assert dupes(same_pdf) == "pass"
-    assert dupes(two_statements) == "pass"
-    assert dupes(reused_photo) == "fail"
+    def lines(page, start, amounts):
+        return [Entry(id=f"{page}{k}", evidence_id=page, date=f"2026-10-{start + k:02d}", description="s", amount_in=a)
+                for k, a in enumerate(amounts)]
+
+    dupes = lambda ents, evs: next(c for c in analysis.integrity("ID", ents, evs) if c.id == "chk_dupes").result  # noqa: E731
+    two_pages = lines("ev1", 1, [100, 200, 300, 400]) + lines("ev2", 5, [500, 600, 700, 800])
+    assert dupes(two_pages, [ev(1, "ledger", "a"), ev(2, "ledger", "b")]) == "pass"       # different pages, alike photos
+    same_page = lines("ev1", 1, [100, 200, 300, 400]) + lines("ev2", 1, [100, 200, 300, 400])
+    assert dupes(same_page, [ev(1, "ledger", "a"), ev(2, "ledger", "b")]) == "fail"       # one page photographed twice
+    assert dupes([], [ev(1, "receipt", "same"), ev(2, "receipt", "same")]) == "fail"      # the same file uploaded twice
+    assert dupes([], [ev(1, "statement", "a", "doc"), ev(2, "statement", "b", "doc")]) == "pass"  # pages of one PDF
 
 
 def test_per_item_rows_are_added_up_by_code_not_the_model():

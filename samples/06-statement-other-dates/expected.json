@@ -1,0 +1,10 @@
+{
+  "market": "IN",
+  "notebook_sales": 56870,
+  "statement_received": 31540,
+  "days": 23,
+  "first": "2026-09-21",
+  "last": "2026-10-16",
+  "statement_period": "2026-07-01 to 2026-07-31",
+  "expect": "The statement covers July, the day book Sep-Oct: the checks say they cover different dates and the case goes to a loan officer."
+}

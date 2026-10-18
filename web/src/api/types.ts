@@ -41,7 +41,7 @@ export interface Evidence {
   status?: EvidenceStatus
   note?: string
   /** After a notebook page is read: what it turned out to be (and why, if no lines were kept). */
-  read_kind?: 'daily_records' | 'period_summary' | 'not_records' | null
+  read_kind?: 'daily_records' | 'period_summary' | 'not_records' | 'unreadable' | null
   read_note?: string
 }
 

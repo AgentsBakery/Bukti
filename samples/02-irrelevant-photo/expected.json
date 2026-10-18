@@ -1,0 +1,209 @@
+{
+  "market": "IN",
+  "notebook_sales": 56870,
+  "statement_received": 31540,
+  "days": 23,
+  "first": "2026-09-21",
+  "last": "2026-10-16",
+  "lines": [
+    {
+      "date": "2026-09-21",
+      "description": "Sales",
+      "in": 2800,
+      "out": 0
+    },
+    {
+      "date": "2026-09-21",
+      "description": "Sugar",
+      "in": 0,
+      "out": 360
+    },
+    {
+      "date": "2026-09-22",
+      "description": "Sales",
+      "in": 2640,
+      "out": 0
+    },
+    {
+      "date": "2026-09-22",
+      "description": "Sugar",
+      "in": 0,
+      "out": 370
+    },
+    {
+      "date": "2026-09-23",
+      "description": "Sales",
+      "in": 2250,
+      "out": 0
+    },
+    {
+      "date": "2026-09-24",
+      "description": "Sales",
+      "in": 2600,
+      "out": 0
+    },
+    {
+      "date": "2026-09-24",
+      "description": "Tea powder",
+      "in": 0,
+      "out": 710
+    },
+    {
+      "date": "2026-09-25",
+      "description": "Sales",
+      "in": 2700,
+      "out": 0
+    },
+    {
+      "date": "2026-09-26",
+      "description": "Sales",
+      "in": 2630,
+      "out": 0
+    },
+    {
+      "date": "2026-09-28",
+      "description": "Sales",
+      "in": 2860,
+      "out": 0
+    },
+    {
+      "date": "2026-09-28",
+      "description": "Tea powder",
+      "in": 0,
+      "out": 670
+    },
+    {
+      "date": "2026-09-29",
+      "description": "Sales",
+      "in": 2440,
+      "out": 0
+    },
+    {
+      "date": "2026-09-30",
+      "description": "Sales",
+      "in": 2490,
+      "out": 0
+    },
+    {
+      "date": "2026-10-01",
+      "description": "Sales",
+      "in": 2570,
+      "out": 0
+    },
+    {
+      "date": "2026-10-02",
+      "description": "Sales",
+      "in": 2550,
+      "out": 0
+    },
+    {
+      "date": "2026-10-03",
+      "description": "Sales",
+      "in": 3690,
+      "out": 0
+    },
+    {
+      "date": "2026-10-05",
+      "description": "Sales",
+      "in": 3260,
+      "out": 0
+    },
+    {
+      "date": "2026-10-06",
+      "description": "Sales",
+      "in": 2460,
+      "out": 0
+    },
+    {
+      "date": "2026-10-06",
+      "description": "Gas cylinder",
+      "in": 0,
+      "out": 1050
+    },
+    {
+      "date": "2026-10-07",
+      "description": "Sales",
+      "in": 2560,
+      "out": 0
+    },
+    {
+      "date": "2026-10-08",
+      "description": "Sales",
+      "in": 2240,
+      "out": 0
+    },
+    {
+      "date": "2026-10-09",
+      "description": "Sales",
+      "in": 2480,
+      "out": 0
+    },
+    {
+      "date": "2026-10-09",
+      "description": "Gas cylinder",
+      "in": 0,
+      "out": 960
+    },
+    {
+      "date": "2026-10-10",
+      "description": "Sales",
+      "in": 2290,
+      "out": 0
+    },
+    {
+      "date": "2026-10-10",
+      "description": "Tea powder",
+      "in": 0,
+      "out": 630
+    },
+    {
+      "date": "2026-10-12",
+      "description": "Sales",
+      "in": 1730,
+      "out": 0
+    },
+    {
+      "date": "2026-10-13",
+      "description": "Sales",
+      "in": 1680,
+      "out": 0
+    },
+    {
+      "date": "2026-10-13",
+      "description": "Milk purchase",
+      "in": 0,
+      "out": 1070
+    },
+    {
+      "date": "2026-10-14",
+      "description": "Sales",
+      "in": 1720,
+      "out": 0
+    },
+    {
+      "date": "2026-10-15",
+      "description": "Sales",
+      "in": 2050,
+      "out": 0
+    },
+    {
+      "date": "2026-10-15",
+      "description": "Sugar",
+      "in": 0,
+      "out": 400
+    },
+    {
+      "date": "2026-10-16",
+      "description": "Sales",
+      "in": 2180,
+      "out": 0
+    },
+    {
+      "date": "2026-10-16",
+      "description": "Tea powder",
+      "in": 0,
+      "out": 610
+    }
+  ],
+  "expect": "The beach photo is labelled 'Not used' and left out; the day book and statement are read normally."
+}

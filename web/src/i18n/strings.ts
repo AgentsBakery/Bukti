@@ -250,6 +250,7 @@ const S = {
   readNotRecords: { id: 'Halaman ini sepertinya bukan catatan penjualan usaha Anda.', ta: 'இது உங்கள் கடையின் விற்பனைப் பதிவு போலத் தெரியவில்லை.', en: 'This page doesn’t look like your shop’s sales records.' },
   readNeedDaily: { id: 'Tambahkan halaman yang mencatat penjualan setiap hari beserta tanggalnya.', ta: 'ஒவ்வொரு நாளின் விற்பனையும் தேதியும் எழுதிய பக்கங்களைச் சேர்க்கவும்.', en: 'Add pages that show each day’s sales with the date.' },
   backToDocs: { id: 'Kembali ke dokumen', ta: 'ஆவணங்களுக்குத் திரும்பு', en: 'Back to my documents' },
+  readUnclear: { id: 'Halaman ini terlalu buram atau gelap untuk dibaca. Foto ulang ya.', ta: 'இந்தப் பக்கம் படிக்க முடியாத அளவு மங்கலாக அல்லது இருட்டாக உள்ளது. மீண்டும் புகைப்படம் எடுங்கள்.', en: 'This page is too blurry or dark to read. Please take the photo again.' },
 } as const
 
 export type StringKey = keyof typeof S

@@ -246,7 +246,7 @@ function DocRow({
             ) : null}
             {blurry ? <span className="font-bold text-turmeric-deep">· {t('mayBeBlurry')}</span> : null}
             {ev.read_kind && ev.read_kind !== 'daily_records' ? (
-              <span className="basis-full font-bold text-chili-ink">{ev.read_kind === 'period_summary' ? t('readSummaryPage') : t('readNotRecords')}</span>
+              <span className="basis-full font-bold text-chili-ink">{ev.read_kind === 'period_summary' ? t('readSummaryPage') : ev.read_kind === 'unreadable' ? t('readUnclear') : t('readNotRecords')}</span>
             ) : null}
             {ev.original_name ? <span className="max-w-[160px] truncate">· {ev.original_name}</span> : null}
           </span>

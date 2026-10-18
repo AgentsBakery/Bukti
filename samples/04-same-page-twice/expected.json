@@ -1,0 +1,9 @@
+{
+  "market": "IN",
+  "notebook_sales": 56870,
+  "statement_received": 31540,
+  "days": 23,
+  "first": "2026-09-21",
+  "last": "2026-10-16",
+  "expect": "The 'Re-used photos' check flags page 1 submitted twice; the duplicated lines inflate notebook sales."
+}

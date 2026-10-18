@@ -1,0 +1,9 @@
+{
+  "market": "ID",
+  "notebook_sales": 12729000,
+  "statement_received": 5317000,
+  "days": 23,
+  "first": "2026-09-21",
+  "last": "2026-10-16",
+  "expect": "Picked together: notebook pages, statement pages, a receipt, a shop photo and an unrelated photo, each labelled correctly; the unrelated photo is 'Not used'."
+}

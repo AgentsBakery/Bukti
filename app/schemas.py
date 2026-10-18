@@ -64,7 +64,7 @@ class Evidence(BaseModel):
     status: EvidenceStatus = "ready"
     note: str = ""
     # Set when a notebook page has been read: what the page turned out to be, and why if no lines were kept.
-    read_kind: Literal["daily_records", "period_summary", "not_records"] | None = None
+    read_kind: Literal["daily_records", "period_summary", "not_records", "unreadable"] | None = None
     read_note: str = ""
 
 

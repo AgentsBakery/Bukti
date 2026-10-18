@@ -141,7 +141,7 @@ export function FotoStep() {
                   .map((e) => (
                     <li key={e.id}>
                       <span className="font-bold text-soot">{e.original_name || e.label}:</span>{' '}
-                      {e.read_kind === 'period_summary' ? t('readSummaryPage') : t('readNotRecords')}
+                      {e.read_kind === 'period_summary' ? t('readSummaryPage') : e.read_kind === 'unreadable' ? t('readUnclear') : t('readNotRecords')}
                     </li>
                   ))}
               </ul>

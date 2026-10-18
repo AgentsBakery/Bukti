@@ -1,0 +1,156 @@
+{
+  "market": "ID",
+  "lines_on_page": [
+    {
+      "date": "2026-09-21",
+      "description": "Jualan",
+      "in": 457500,
+      "out": 0
+    },
+    {
+      "date": "2026-09-21",
+      "description": "Kulakan beras",
+      "in": 0,
+      "out": 1418500
+    },
+    {
+      "date": "2026-09-22",
+      "description": "Jualan",
+      "in": 612500,
+      "out": 0
+    },
+    {
+      "date": "2026-09-23",
+      "description": "Jualan",
+      "in": 563000,
+      "out": 0
+    },
+    {
+      "date": "2026-09-24",
+      "description": "Jualan",
+      "in": 447500,
+      "out": 0
+    },
+    {
+      "date": "2026-09-25",
+      "description": "Jualan",
+      "in": 457000,
+      "out": 0
+    },
+    {
+      "date": "2026-09-26",
+      "description": "Jualan",
+      "in": 508000,
+      "out": 0
+    },
+    {
+      "date": "2026-09-28",
+      "description": "Jualan",
+      "in": 608500,
+      "out": 0
+    },
+    {
+      "date": "2026-09-28",
+      "description": "Beli gas 3kg",
+      "in": 0,
+      "out": 62000
+    },
+    {
+      "date": "2026-09-29",
+      "description": "Jualan",
+      "in": 622000,
+      "out": 0
+    },
+    {
+      "date": "2026-09-30",
+      "description": "Jualan",
+      "in": 568500,
+      "out": 0
+    },
+    {
+      "date": "2026-10-01",
+      "description": "Jualan",
+      "in": 681500,
+      "out": 0
+    },
+    {
+      "date": "2026-10-02",
+      "description": "Jualan",
+      "in": 637000,
+      "out": 0
+    },
+    {
+      "date": "2026-10-03",
+      "description": "Jualan",
+      "in": 722500,
+      "out": 0
+    },
+    {
+      "date": "2026-10-05",
+      "description": "Jualan",
+      "in": 536000,
+      "out": 0
+    },
+    {
+      "date": "2026-10-06",
+      "description": "Jualan",
+      "in": 687000,
+      "out": 0
+    },
+    {
+      "date": "2026-10-06",
+      "description": "Kulakan telur",
+      "in": 0,
+      "out": 360000
+    },
+    {
+      "date": "2026-10-07",
+      "description": "Jualan",
+      "in": 581500,
+      "out": 0
+    },
+    {
+      "date": "2026-10-08",
+      "description": "Jualan",
+      "in": 608000,
+      "out": 0
+    },
+    {
+      "date": "2026-10-09",
+      "description": "Jualan",
+      "in": 565000,
+      "out": 0
+    },
+    {
+      "date": "2026-10-09",
+      "description": "Kulakan minyak & gula",
+      "in": 0,
+      "out": 1065000
+    },
+    {
+      "date": "2026-10-10",
+      "description": "Jualan",
+      "in": 606000,
+      "out": 0
+    },
+    {
+      "date": "2026-10-10",
+      "description": "Beli gas 3kg",
+      "in": 0,
+      "out": 68500
+    },
+    {
+      "date": "2026-10-12",
+      "description": "Jualan",
+      "in": 503000,
+      "out": 0
+    },
+    {
+      "date": "2026-10-13",
+      "description": "Jualan",
+      "in": 407000,
+      "out": 0
+    }
+  ],
+  "expect": "The phone warns 'May be blurry'. Gemini may still read some lines; anything it can't read is missing, so the notebook vs statement checks show the gap."
+}
