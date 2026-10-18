@@ -33,6 +33,9 @@ PROMPT_VERSION = "ledger-v4"  # demo-pack pages (their reads are bundled under t
 UPLOAD_PROMPT_VERSION = "upload-v5"  # pages people upload
 CALL_TIMEOUT_S = 60
 HEDGE_AFTER_S = 22
+# Uploaded notebook pages are read with more thinking: on a real per-item sales sheet, "low" missed a column in one
+# run of three while "medium" read every day exactly in three of three (about 15-20 s more per page).
+UPLOAD_THINKING, UPLOAD_HEDGE_AFTER_S, UPLOAD_TIMEOUT_S = "medium", 50, 100
 MIN_SCAN_S = 3.0
 MAX_LINE_AMOUNT = {"ID": 500_000_000, "IN": 5_000_000}
 
@@ -159,12 +162,13 @@ def _valid_date(s: str, fallback: str, today: date | None = None) -> str:
     return d.isoformat()
 
 
-async def _generate(prompt: str, image: bytes, schema: type[BaseModel]) -> BaseModel:
+async def _generate(prompt: str, image: bytes, schema: type[BaseModel], thinking: str = "low",
+                    hedge_after: float = HEDGE_AFTER_S, timeout: float = CALL_TIMEOUT_S) -> BaseModel:
     cfg = types.GenerateContentConfig(
         response_mime_type="application/json",
         response_schema=schema,
         media_resolution=types.MediaResolution.MEDIA_RESOLUTION_HIGH,
-        thinking_config=types.ThinkingConfig(thinking_level="low"),
+        thinking_config=types.ThinkingConfig(thinking_level=thinking),
     )
     async def call():
         started = time.perf_counter()
@@ -187,9 +191,9 @@ async def _generate(prompt: str, image: bytes, schema: type[BaseModel]) -> BaseM
         try:
             # Hedged request: if the first call is slow, race a second one and keep whichever lands first.
             first = asyncio.ensure_future(call())
-            done, _ = await asyncio.wait({first}, timeout=HEDGE_AFTER_S)
+            done, _ = await asyncio.wait({first}, timeout=hedge_after)
             racers = {first} if done else {first, asyncio.ensure_future(call())}
-            done, pending = await asyncio.wait(racers, timeout=CALL_TIMEOUT_S, return_when=asyncio.FIRST_COMPLETED)
+            done, pending = await asyncio.wait(racers, timeout=timeout, return_when=asyncio.FIRST_COMPLETED)
             for t in pending:
                 t.cancel()
             winners = [t for t in done if not t.exception()]
@@ -228,7 +232,8 @@ async def read_ledger(app: Application, ev: Evidence, period: tuple[str, str]) -
                 f'The notebook covers {period[0]} to {period[1]}. Short dates like "1/9" mean day/month; use year {period[0][:4]}.')
         prompt = LEDGER_PROMPT.format(
             market_name=MARKET_NAMES[app.market], language=LANGUAGES[app.market], currency=app.currency, period=when)
-        parsed = await _generate(prompt, image, LedgerRead)
+        parsed = await (_generate(prompt, image, LedgerRead, UPLOAD_THINKING, UPLOAD_HEDGE_AFTER_S, UPLOAD_TIMEOUT_S)
+                        if real else _generate(prompt, image, LedgerRead))
         raw = {"lines": [ln.model_dump() for ln in parsed.lines], "notes": parsed.notes,
                "page_kind": parsed.page_kind, "reason": parsed.reason}
         cache.parent.mkdir(parents=True, exist_ok=True)

@@ -186,7 +186,7 @@ flowchart TB
 | Agent | Type | Model | Decides or explains | Guardrails |
 |---|---|---|---|---|
 | Classifier | function, on upload | gemini-3.8-flash | Sorts | labels each uploaded page (notebook, statement, receipt, shop, other) with a confidence; below 0.6 the borrower must confirm; 25 s timeout, one retry, then the borrower picks |
-| Extractor | `BaseAgent` (custom) | gemini-3.8-flash | Reads | response schema, bbox clamp, implausible-amount drop, 60 s timeout + hedge, cache by image hash |
+| Extractor | `BaseAgent` (custom) | gemini-3.8-flash | Reads | response schema, bbox clamp, implausible-amount drop, 60 s timeout + hedge, cache by image hash; uploaded pages: handwritten, printed or spreadsheet layouts, per-item amounts added up in code, medium thinking (100 s timeout), and each page reports whether it holds daily records, period totals or neither |
 | Interviewer | `LlmAgent` (live) | gemini-3.8-live | Asks | no protected attributes, never promises a loan, 5-min cap, reconnect once, quotes only reach the memo after Model Armor |
 | Benchmark | `BaseAgent` | — (BigQuery) | Decides input | validated identifiers, parameterised query, cached |
 | Reconciler | `BaseAgent` | — | **Decides** | deterministic, unit-tested on ground truth |

@@ -32,6 +32,8 @@ An image at `MEDIA_RESOLUTION_HIGH` costs up to 1,120 tokens.
 | **Full application** | | **≈ $0.09** |
 | Each Officer Copilot question (Flash, ~5 calls with tool results) | in ≈ 20,000 · out ≈ 2,500 | **≈ $0.024** |
 
+- **Uploaded pages** (real applications) are read with more thinking for accuracy: about +$0.02 per notebook page
+  over a demo-pack page, plus ≈ $0.001 per page to classify it on upload.
 - **Judge running a demo pack** (reads are pre-computed and bundled): ≈ **$0.07** with interview + memo, plus
   ≈ $0.024 per copilot question.
 - After intro pricing ends: a full application rises to ≈ **$0.15**.
