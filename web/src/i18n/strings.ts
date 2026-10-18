@@ -245,6 +245,11 @@ const S = {
   statusReview: { id: 'Ditinjau petugas', ta: 'அலுவலர் பரிசீலனையில்', en: 'With a loan officer' },
   statusApproved: { id: 'Disetujui', ta: 'ஒப்புதல் அளிக்கப்பட்டது', en: 'Approved' },
   statusDeclined: { id: 'Ditolak', ta: 'நிராகரிக்கப்பட்டது', en: 'Declined' },
+  readNone: { id: 'Kami belum menemukan penjualan harian bertanggal.', ta: 'தேதியிட்ட தினசரி விற்பனையை இன்னும் காணவில்லை.', en: 'We couldn’t find dated daily sales yet.' },
+  readSummaryPage: { id: 'Halaman ini berisi total per bulan atau tahun, bukan penjualan harian.', ta: 'இந்தப் பக்கத்தில் மாத அல்லது ஆண்டு மொத்தங்கள் உள்ளன, தினசரி விற்பனை அல்ல.', en: 'This page shows monthly or yearly totals, not daily sales.' },
+  readNotRecords: { id: 'Halaman ini sepertinya bukan catatan penjualan usaha Anda.', ta: 'இது உங்கள் கடையின் விற்பனைப் பதிவு போலத் தெரியவில்லை.', en: 'This page doesn’t look like your shop’s sales records.' },
+  readNeedDaily: { id: 'Tambahkan halaman yang mencatat penjualan setiap hari beserta tanggalnya.', ta: 'ஒவ்வொரு நாளின் விற்பனையும் தேதியும் எழுதிய பக்கங்களைச் சேர்க்கவும்.', en: 'Add pages that show each day’s sales with the date.' },
+  backToDocs: { id: 'Kembali ke dokumen', ta: 'ஆவணங்களுக்குத் திரும்பு', en: 'Back to my documents' },
 } as const
 
 export type StringKey = keyof typeof S

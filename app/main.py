@@ -423,7 +423,9 @@ async def extract_stream(app_id: str, force: bool = False, caller: Caller | None
 
 @app.get("/api/applications/{app_id}/assess/stream", dependencies=[Depends(guards.rate_limit("stage"))])
 async def assess_stream(app_id: str, force: bool = False, caller: Caller | None = Depends(optional_caller)):
-    await _visible(app_id, caller)
+    a = await _visible(app_id, caller)
+    if not a.entries and not a.memo:
+        raise HTTPException(409, "No sales have been read yet. Add notebook pages with daily sales and read them first.")
     return _stream("assess", app_id, force, caller)
 
 

@@ -132,6 +132,31 @@ export function FotoStep() {
                 {t('retry')}
               </button>
             </motion.div>
+          ) : summary && summary.lines === 0 ? (
+            <motion.div key="none" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} role="alert">
+              <p className="font-display text-[21px] leading-tight text-ink">{t('readNone')}</p>
+              <ul className="mt-1.5 grid gap-1 text-[14.5px] leading-snug text-soot-2">
+                {app.evidence
+                  .filter((e) => e.type === 'ledger' && e.read_kind && e.read_kind !== 'daily_records')
+                  .map((e) => (
+                    <li key={e.id}>
+                      <span className="font-bold text-soot">{e.original_name || e.label}:</span>{' '}
+                      {e.read_kind === 'period_summary' ? t('readSummaryPage') : t('readNotRecords')}
+                    </li>
+                  ))}
+              </ul>
+              <p className="mb-3 mt-1.5 text-[14.5px] leading-snug text-soot-2">{t('readNeedDaily')}</p>
+              <button
+                type="button"
+                className="btn-ink w-full"
+                onClick={() => {
+                  setSummary(null)
+                  setMode('tray')
+                }}
+              >
+                {t('backToDocs')}
+              </button>
+            </motion.div>
           ) : reading || (mode === 'static' && app.status === 'extracting') ? (
             <motion.div key="reading" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}>
               <div className="flex min-h-[60px] items-center justify-center gap-3 rounded-2xl bg-paper-2 text-[17px] font-bold text-ink" aria-live="polite">

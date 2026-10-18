@@ -40,6 +40,9 @@ export interface Evidence {
   label_source?: 'pack' | 'ai' | 'borrower'
   status?: EvidenceStatus
   note?: string
+  /** After a notebook page is read: what it turned out to be (and why, if no lines were kept). */
+  read_kind?: 'daily_records' | 'period_summary' | 'not_records' | null
+  read_note?: string
 }
 
 /** [ymin, xmin, ymax, xmax], each normalised 0–1000 (Gemini convention). */

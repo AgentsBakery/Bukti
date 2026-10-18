@@ -85,3 +85,11 @@ def test_pages_of_one_pdf_and_lookalike_statements_are_not_duplicates():
     assert dupes(same_pdf) == "pass"
     assert dupes(two_statements) == "pass"
     assert dupes(reused_photo) == "fail"
+
+
+def test_per_item_rows_are_added_up_by_code_not_the_model():
+    from agents.extractor import sales_in
+    # 25-Jan-12 on the user's tea-shop sheet: the model said 74, its own parts add up to 72 (the true total).
+    assert sales_in({"amount_in": 74, "parts": [40, 12, 10, 10]}) == 72
+    assert sales_in({"amount_in": 24, "parts": []}) == 24          # a single-amount row
+    assert sales_in({"amount_in": 120, "parts": [0, 120]}) == 120  # zero parts are ignored

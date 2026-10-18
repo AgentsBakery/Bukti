@@ -14,6 +14,7 @@ import re
 import time
 from datetime import date
 from collections.abc import AsyncGenerator
+from typing import Literal
 
 from google.adk.agents import BaseAgent, InvocationContext
 from google.adk.events import Event
@@ -28,7 +29,8 @@ from app.schemas import Application, Entry, Evidence, PageNote, StatementDay, no
 from app.store import new_id, store
 
 log = logging.getLogger("bukti.extractor")
-PROMPT_VERSION = "ledger-v4"
+PROMPT_VERSION = "ledger-v4"  # demo-pack pages (their reads are bundled under this key)
+UPLOAD_PROMPT_VERSION = "upload-v5"  # pages people upload
 CALL_TIMEOUT_S = 60
 HEDGE_AFTER_S = 22
 MIN_SCAN_S = 3.0
@@ -43,6 +45,10 @@ class LedgerLine(BaseModel):
     date: str = Field(description="ISO date YYYY-MM-DD of this line")
     description: str = Field(description="What the line says, transcribed in its original language and script")
     amount_in: int = Field(description="Money received on this line as a plain integer, 0 if none")
+    parts: list[int] = Field(default_factory=list, description=(
+        "When the row splits its sales across several items or columns, every MONEY amount of the row "
+        "(e.g. Tea amount, Coffee amount, Biscuit, Snacks), as plain integers - never quantities or rates. "
+        "Empty when the row has a single amount."))
     amount_out: int = Field(description="Money spent on this line as a plain integer, 0 if none")
     amount_box: list[int] = Field(description="[ymin, xmin, ymax, xmax] 0-1000 box around the handwritten amount")
     row_box: list[int] = Field(description="[ymin, xmin, ymax, xmax] 0-1000 box around the whole line")
@@ -50,6 +56,11 @@ class LedgerLine(BaseModel):
 
 
 class LedgerRead(BaseModel):
+    page_kind: Literal["daily_records", "period_summary", "not_records"] = Field(
+        default="daily_records",
+        description="daily_records: rows carry calendar dates; period_summary: rows are whole months, years or "
+                    "other periods without calendar dates; not_records: not a record of this shop's sales or spending")
+    reason: str = Field(default="", description="One short English sentence saying what the page shows")
     lines: list[LedgerLine]
     notes: list[str] = Field(default_factory=list,
                              description="Any other handwritten text on the page that is not a money line, verbatim")
@@ -68,14 +79,22 @@ class StatementRead(BaseModel):
     rows: list[StatementRow]
 
 
-LEDGER_PROMPT = """You are reading one photographed page of a small shop's handwritten cash notebook.
+LEDGER_PROMPT = """You are reading one page of a small shop's own sales and cash records: a handwritten notebook,
+a printed register, or a spreadsheet printout, photographed or scanned.
 Market: {market_name}. Language on the page: {language}. Currency: {currency}.
 {period}
-If a row has no date, it shares the date of the row above it.
+If a row has no date, it shares the date of the row above it. The same date may appear on several rows; return each row.
 
-Columns are usually: date | description | money in (sales received) | money out (spending, stock purchases, bills).
-Decide in vs out from the column position and from the description (sales/jualan/விற்பனை are in;
-kulakan/beli/bayar/கொள்முதல்/வாங்கியது/கட்டணம் are out).
+Common layouts:
+- date | description | money in (sales received) | money out (spending, stock purchases, bills). Decide in vs out from
+  the column and the description (sales/jualan/விற்பனை are in; kulakan/beli/bayar/கொள்முதல்/வாங்கியது/கட்டணம் are out).
+- one row per date with a column group per item sold (e.g. Tea: quantity, rate, amount; Coffee: ...; Biscuit; Snacks).
+  Put every money amount of the row in `parts` (the Amount columns, and columns that are already money) - never the
+  quantities or rates - and set amount_in to their sum. Leave Grand Total rows out.
+
+Set page_kind: daily_records if rows carry calendar dates; period_summary if rows are whole months, years or other
+periods without calendar dates (then return no lines); not_records if the page is not this shop's own sales or
+spending (then return no lines). Say in `reason` what the page shows.
 
 Read amounts exactly as integers:
 - Indonesia writes thousands with dots: "463.500" = 463500. "450rb" or "450 rb" = 450000. "1,2jt" = 1200000.
@@ -108,8 +127,8 @@ def _date_rule(today: date) -> str:
             f"\"yesterday\"/\"kemarin\" are relative to today.")
 
 
-def _cache_path(kind: str, sha: str):
-    key = hashlib.sha256(f"{kind}:{sha}:{settings.model_extract}:{PROMPT_VERSION}".encode()).hexdigest()[:24]
+def _cache_path(kind: str, sha: str, version: str = PROMPT_VERSION):
+    key = hashlib.sha256(f"{kind}:{sha}:{settings.model_extract}:{version}".encode()).hexdigest()[:24]
     bundled = settings.data_dir / "cache" / f"{key}.json"
     return bundled if bundled.exists() else settings.cache_dir / "extract" / f"{key}.json"
 
@@ -184,6 +203,13 @@ async def _generate(prompt: str, image: bytes, schema: type[BaseModel]) -> BaseM
     raise RuntimeError(f"Gemini extraction failed: {last}")
 
 
+def sales_in(line: dict) -> int:
+    """Money in for one row. Per-item rows are added up here from their money parts, so the total never rests
+    on the model's arithmetic."""
+    parts = [int(p) for p in line.get("parts") or [] if int(p or 0) > 0]
+    return sum(parts) if parts else max(0, int(line.get("amount_in") or 0))
+
+
 async def read_ledger(app: Application, ev: Evidence, period: tuple[str, str]) -> list[Entry]:
     if devdata.ENABLED and app.pack_id:
         await asyncio.sleep(1.2)
@@ -191,7 +217,7 @@ async def read_ledger(app: Application, ev: Evidence, period: tuple[str, str]) -
     # Uploaded pages are read relative to today; demo-pack pages carry their pack's fixed period.
     real = not ev.src.startswith("pack:")
     today = date.today()
-    cache = _cache_path("ledger", ev.sha256)
+    cache = _cache_path("ledger", ev.sha256, UPLOAD_PROMPT_VERSION if real else PROMPT_VERSION)
     if cache.exists():
         raw = json.loads(cache.read_text(encoding="utf-8"))
     else:
@@ -203,21 +229,27 @@ async def read_ledger(app: Application, ev: Evidence, period: tuple[str, str]) -
         prompt = LEDGER_PROMPT.format(
             market_name=MARKET_NAMES[app.market], language=LANGUAGES[app.market], currency=app.currency, period=when)
         parsed = await _generate(prompt, image, LedgerRead)
-        raw = {"lines": [ln.model_dump() for ln in parsed.lines], "notes": parsed.notes}
+        raw = {"lines": [ln.model_dump() for ln in parsed.lines], "notes": parsed.notes,
+               "page_kind": parsed.page_kind, "reason": parsed.reason}
         cache.parent.mkdir(parents=True, exist_ok=True)
         cache.write_text(json.dumps(raw, ensure_ascii=False), encoding="utf-8")
     notes = [n for n in raw.get("notes", []) if str(n).strip()]
-    if notes:
-        async with store.lock(app.id):
-            a = await store.get(app.id)
+    kind, reason = raw.get("page_kind", "daily_records"), str(raw.get("reason", ""))[:200]
+    async with store.lock(app.id):
+        a = await store.get(app.id)
+        if notes:
             a.page_notes = [n for n in a.page_notes if n.evidence_id != ev.id] + [
                 PageNote(evidence_id=ev.id, text=str(n)[:300]) for n in notes]
-            await store.save(a)
+        for e in a.evidence:
+            if e.id == ev.id:
+                e.read_kind, e.read_note = kind, reason
+        await store.save(a)
     entries = []
     last_date = today.isoformat() if real else period[0]
     for ln in raw["lines"]:
         d = _valid_date(ln.get("date", ""), last_date, today if real else None)
         last_date = d
+        ln = {**ln, "amount_in": sales_in(ln)}
         if not (ln.get("amount_in") or ln.get("amount_out")):
             continue
         # Guardrail: a misread digit can turn Rp 450.000 into 450 billion; drop implausible lines.
@@ -235,7 +267,7 @@ async def read_ledger(app: Application, ev: Evidence, period: tuple[str, str]) -
 async def read_statement(app: Application, ev: Evidence) -> list[StatementDay]:
     if devdata.ENABLED and app.pack_id:
         return devdata.statement_days(app, ev)
-    cache = _cache_path("statement", ev.sha256)
+    cache = _cache_path("statement", ev.sha256, PROMPT_VERSION if ev.src.startswith("pack:") else UPLOAD_PROMPT_VERSION)
     if cache.exists():
         raw = json.loads(cache.read_text(encoding="utf-8"))
     else:
@@ -366,7 +398,10 @@ class ExtractorAgent(BaseAgent):
             app.status = "extracted"
         else:
             step.status = "error"
-            step.summary = "Could not read the notebook" + (f": {errors[0]}" if errors else "")
+            why = next((e.read_note for e in app.evidence if e.type == "ledger" and e.read_kind != "daily_records"
+                        and e.read_note), "")
+            step.summary = ("No dated daily sales found" + (f": {why}" if why else "") if not errors
+                            else f"Could not read the notebook: {errors[0]}")
             app.status = "draft"
         await store.save(app)
         yield sse(self.name, ctx, {"type": "agent", "agent": "extractor", "status": step.status, "summary": step.summary})
