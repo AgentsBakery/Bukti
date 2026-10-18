@@ -1,0 +1,232 @@
+[
+  {
+    "set": "01-yearly-summary",
+    "case": "app_91b7002e79",
+    "labels": [
+      "ringkasan-2025.jpg → ledger"
+    ],
+    "read": "error: No dated daily sales found: Monthly sales summary for the year 2025 rather than daily records",
+    "unusable_pages": [
+      "ringkasan-2025.jpg: period_summary — Monthly sales summary for the year 2025 rather than daily records"
+    ],
+    "notebook_sales_read": 0,
+    "statement_received_read": 0,
+    "outcome": "assessment refused: {\"detail\":\"No sales have been read yet. Add notebook pages with daily sales and read them first.\"}"
+  },
+  {
+    "set": "02-irrelevant-photo",
+    "case": "app_465a875913",
+    "labels": [
+      "IMG_beach.jpg → other (excluded)",
+      "daybook-page1.jpg → ledger",
+      "daybook-page2.jpg → ledger",
+      "upi-statement.pdf p1 → statement",
+      "upi-statement.pdf p2 → statement",
+      "upi-statement.pdf p3 → statement",
+      "upi-statement.pdf p4 → statement",
+      "upi-statement.pdf p5 → statement",
+      "upi-statement.pdf p6 → statement"
+    ],
+    "read": "done: Read 33 lines from 2 pages and 23 statement days",
+    "unusable_pages": [],
+    "notebook_sales_read": 56870,
+    "notebook_sales_expected": 56870,
+    "statement_received_read": 31540,
+    "statement_received_expected": 31540,
+    "outcome": "approve 10,500",
+    "checks": [
+      "chk_purpose: warn — Loan purpose not stated (the interview was skipped)."
+    ]
+  },
+  {
+    "set": "03-blurry-photo",
+    "case": "app_b89f8621ed",
+    "labels": [
+      "buku-kas-blur.jpg → ledger",
+      "qris-statement.pdf p1 → statement",
+      "qris-statement.pdf p2 → statement",
+      "qris-statement.pdf p3 → statement",
+      "qris-statement.pdf p4 → statement"
+    ],
+    "read": "error: No dated daily sales found: The entire document is heavily blurred and the dates, descriptions, and numbers cannot be read reliably.",
+    "unusable_pages": [
+      "buku-kas-blur.jpg: unreadable — The entire document is heavily blurred and the dates, descriptions, and numbers cannot be read reliably."
+    ],
+    "notebook_sales_read": 0,
+    "statement_received_read": 5317000,
+    "outcome": "assessment refused: {\"detail\":\"No sales have been read yet. Add notebook pages with daily sales and read them first.\"}"
+  },
+  {
+    "set": "04-same-page-twice",
+    "case": "app_8662636f7e",
+    "labels": [
+      "daybook-p1-again.jpg → ledger",
+      "daybook-p1.jpg → ledger",
+      "daybook-p2.jpg → ledger",
+      "upi-statement.pdf p1 → statement",
+      "upi-statement.pdf p2 → statement",
+      "upi-statement.pdf p3 → statement",
+      "upi-statement.pdf p4 → statement",
+      "upi-statement.pdf p5 → statement",
+      "upi-statement.pdf p6 → statement"
+    ],
+    "read": "done: Read 58 lines from 3 pages and 23 statement days",
+    "unusable_pages": [],
+    "notebook_sales_read": 104380,
+    "notebook_sales_expected": 56870,
+    "statement_received_read": 31540,
+    "statement_received_expected": 31540,
+    "outcome": "approve_reduced 10,000",
+    "checks": [
+      "chk_share: fail — Digital payments cover only 30% of notebook sales; similar shops are 45%–75%. The notebook likely overstates s",
+      "chk_purpose: warn — Loan purpose not stated (the interview was skipped).",
+      "chk_dupes: fail — The same page was submitted more than once."
+    ]
+  },
+  {
+    "set": "05-no-statement",
+    "case": "app_1c70df454d",
+    "labels": [
+      "buku-kas-hal1.jpg → ledger",
+      "buku-kas-hal2.jpg → ledger"
+    ],
+    "read": "done: Read 30 lines from 2 pages",
+    "unusable_pages": [],
+    "notebook_sales_read": 12729000,
+    "notebook_sales_expected": 12729000,
+    "statement_received_read": 0,
+    "statement_received_expected": 5317000,
+    "outcome": "refer 0",
+    "checks": [
+      "chk_share: warn — No payment statement was provided, so notebook sales could not be checked against an independent record.",
+      "chk_rhythm: warn — Not checked: needs a payment statement covering the same days.",
+      "chk_ghost: warn — Not checked: needs a payment statement covering the same days.",
+      "chk_purpose: warn — Loan purpose not stated (the interview was skipped).",
+      "chk_afford: warn — No offer is made until a loan officer reviews the flags."
+    ]
+  },
+  {
+    "set": "06-statement-other-dates",
+    "case": "app_c66dabf8a9",
+    "labels": [
+      "daybook-page1.jpg → ledger",
+      "daybook-page2.jpg → ledger",
+      "upi-statement-july.pdf p1 → statement",
+      "upi-statement-july.pdf p2 → statement",
+      "upi-statement-july.pdf p3 → statement",
+      "upi-statement-july.pdf p4 → statement",
+      "upi-statement-july.pdf p5 → statement",
+      "upi-statement-july.pdf p6 → statement",
+      "upi-statement-july.pdf p7 → statement"
+    ],
+    "read": "done: Read 33 lines from 2 pages and 27 statement days",
+    "unusable_pages": [],
+    "notebook_sales_read": 56870,
+    "notebook_sales_expected": 56870,
+    "statement_received_read": 37280,
+    "statement_received_expected": 31540,
+    "outcome": "refer 0",
+    "checks": [
+      "chk_share: warn — The payment statement covers different dates from the notebook, so the two could not be compared.",
+      "chk_rhythm: warn — Not checked: needs a payment statement covering the same days.",
+      "chk_ghost: warn — Not checked: needs a payment statement covering the same days.",
+      "chk_purpose: warn — Loan purpose not stated (the interview was skipped).",
+      "chk_afford: warn — No offer is made until a loan officer reviews the flags."
+    ]
+  },
+  {
+    "set": "07-printed-item-sheet",
+    "case": "app_42d1fcd9ab",
+    "labels": [
+      "tea-stall-register.png → ledger",
+      "upi-statement.pdf p1 → statement",
+      "upi-statement.pdf p2 → statement",
+      "upi-statement.pdf p3 → statement",
+      "upi-statement.pdf p4 → statement",
+      "upi-statement.pdf p5 → statement",
+      "upi-statement.pdf p6 → statement"
+    ],
+    "read": "done: Read 23 lines from 1 page and 23 statement days",
+    "unusable_pages": [],
+    "notebook_sales_read": 56756,
+    "notebook_sales_expected": 56756,
+    "statement_received_read": 31540,
+    "statement_received_expected": 31540,
+    "rows_exact": "23/23",
+    "outcome": "approve 10,500",
+    "checks": [
+      "chk_purpose: warn — Loan purpose not stated (the interview was skipped)."
+    ]
+  },
+  {
+    "set": "08-overlapping-screenshots",
+    "case": "app_b16de0298e",
+    "labels": [
+      "Screenshot_qris_1.png → statement",
+      "Screenshot_qris_2.png → statement",
+      "Screenshot_qris_3.png → statement",
+      "buku-kas-hal1.jpg → ledger"
+    ],
+    "read": "done: Read 25 lines from 1 page and 4 statement days",
+    "unusable_pages": [],
+    "notebook_sales_read": 11379000,
+    "statement_received_read": 834000,
+    "statement_days_exact": "4/4",
+    "outcome": "approve 2,900,000",
+    "checks": [
+      "chk_purpose: warn — Loan purpose not stated (the interview was skipped)."
+    ]
+  },
+  {
+    "set": "09-mixed-batch-id",
+    "case": "app_5336abc0ec",
+    "labels": [
+      "IMG_makan.jpg → other (excluded)",
+      "buku-kas-hal1.jpg → ledger",
+      "buku-kas-hal2.jpg → ledger",
+      "nota-grosir.jpg → receipt",
+      "qris-statement.pdf p1 → statement",
+      "qris-statement.pdf p2 → statement",
+      "qris-statement.pdf p3 → statement",
+      "qris-statement.pdf p4 → statement",
+      "warung.jpg → shop"
+    ],
+    "read": "done: Read 30 lines from 2 pages and 23 statement days",
+    "unusable_pages": [],
+    "notebook_sales_read": 12729000,
+    "notebook_sales_expected": 12729000,
+    "statement_received_read": 5317000,
+    "statement_received_expected": 5317000,
+    "outcome": "approve 2,700,000",
+    "checks": [
+      "chk_purpose: warn — Loan purpose not stated (the interview was skipped)."
+    ]
+  },
+  {
+    "set": "09-mixed-batch-in",
+    "case": "app_9f433096d7",
+    "labels": [
+      "IMG_beach.jpg → other (excluded)",
+      "daybook-page1.jpg → ledger",
+      "daybook-page2.jpg → ledger",
+      "stall.jpg → shop",
+      "supplier-bill.jpg → receipt",
+      "upi-statement.pdf p1 → statement",
+      "upi-statement.pdf p2 → statement",
+      "upi-statement.pdf p3 → statement",
+      "upi-statement.pdf p4 → statement",
+      "upi-statement.pdf p5 → statement",
+      "upi-statement.pdf p6 → statement"
+    ],
+    "read": "done: Read 33 lines from 2 pages and 23 statement days",
+    "unusable_pages": [],
+    "notebook_sales_read": 56870,
+    "notebook_sales_expected": 56870,
+    "statement_received_read": 31540,
+    "statement_received_expected": 31540,
+    "outcome": "approve 10,500",
+    "checks": [
+      "chk_purpose: warn — Loan purpose not stated (the interview was skipped)."
+    ]
+  }
+]

@@ -500,7 +500,8 @@ def main() -> None:
     write_set("06-statement-other-dates", {
         "daybook-page1.jpg": phone_photo(t_pages[0], 61), "daybook-page2.jpg": phone_photo(t_pages[1], 62),
         "upi-statement-july.pdf": tmp / "t_july.pdf"}, {
-        "market": "IN", **totals(tea), "statement_period": "2026-07-01 to 2026-07-31",
+        "market": "IN", **totals(tea), "statement_received": sum(x.digital for x in july),
+        "statement_period": "2026-07-01 to 2026-07-31",
         "expect": "The statement covers July, the day book Sep-Oct: the checks say they cover different dates and the "
                   "case goes to a loan officer."})
 
