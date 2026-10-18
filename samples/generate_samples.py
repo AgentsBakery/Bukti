@@ -286,12 +286,18 @@ def statement_pdf(shop: Shop, days: list[Day], out: Path, title: str) -> None:
     pages[0].save(out, format="PDF", save_all=True, append_images=pages[1:], resolution=150)
 
 
-def statement_screenshots(shop: Shop, days: list[Day], groups: list[list[int]]) -> list[Image.Image]:
-    """Phone screenshots of a generic QRIS merchant app's history. `groups` lists the day indexes on each shot;
-    days repeated across shots are whole-day overlaps, like scrolling back a little."""
-    shots = []
+def statement_screenshots(days: list[Day], shots: int = 3, per_shot: int = 13, overlap: int = 3
+                          ) -> tuple[list[Image.Image], dict[str, int]]:
+    """Phone screenshots of a generic QRIS merchant app, scrolled like a real person does: each shot repeats the last
+    `overlap` payments of the previous one, and days are split across shots. Returns the shots and, per day, the
+    total of the payments that are visible on at least one shot (the exact expected statement)."""
+    payments = [(day.d, t, amt) for day in days for t, amt in day.payments]
     f, fb, fs = font(SANS, 34), font(SANS_BOLD, 36), font(SANS, 28)
-    for g in groups:
+    images, visible = [], set()
+    for k in range(shots):
+        first = k * (per_shot - overlap)
+        window = list(range(first, min(first + per_shot, len(payments))))
+        visible.update(window)
         img = Image.new("RGB", (1080, 2340), (245, 246, 250))
         d = ImageDraw.Draw(img)
         d.rectangle((0, 0, 1080, 90), fill=(255, 255, 255))
@@ -299,26 +305,26 @@ def statement_screenshots(shop: Shop, days: list[Day], groups: list[list[int]]) 
         d.text((930, 26), "87%", font=fs, fill="black")
         d.rectangle((0, 90, 1080, 230), fill=(255, 255, 255))
         d.text((60, 130), "← Riwayat Transaksi QRIS", font=font(SANS_BOLD, 40), fill="black")
-        y = 260
-        for idx in g:
-            day = days[idx]
-            if y > 2200:
-                break
-            d.text((60, y), day.d.strftime("%a, %d %b %Y"), font=font(SANS_BOLD, 30), fill=(90, 90, 110))
-            y += 56
-            for t, amt in day.payments:
-                if y > 2240:
-                    break
-                d.rounded_rectangle((40, y, 1040, y + 120), radius=24, fill="white")
-                d.ellipse((70, y + 25, 140, y + 95), fill=(225, 232, 250))
-                d.text((105, y + 60), "QR", font=font(SANS_BOLD, 24), fill=(40, 60, 140), anchor="mm")
-                d.text((170, y + 22), "Pembayaran diterima", font=fb, fill="black")
-                d.text((170, y + 70), f"{t} · QRIS", font=fs, fill=(120, 120, 130))
-                d.text((1010, y + 40), "+" + money("ID", amt), font=fb, fill=(30, 130, 70), anchor="ra")
-                y += 136
-            y += 20
-        shots.append(img)
-    return shots
+        y, shown_day = 250, None
+        for i in window:
+            day, t, amt = payments[i]
+            if day != shown_day:  # a date header above each day's first visible payment (sticky at the top)
+                d.text((60, y), day.strftime("%a, %d %b %Y"), font=font(SANS_BOLD, 30), fill=(90, 90, 110))
+                y += 52
+                shown_day = day
+            d.rounded_rectangle((40, y, 1040, y + 118), radius=24, fill="white")
+            d.ellipse((70, y + 24, 140, y + 94), fill=(225, 232, 250))
+            d.text((105, y + 59), "QR", font=font(SANS_BOLD, 24), fill=(40, 60, 140), anchor="mm")
+            d.text((170, y + 20), "Pembayaran diterima", font=fb, fill="black")
+            d.text((170, y + 68), f"{t} · QRIS", font=fs, fill=(120, 120, 130))
+            d.text((1010, y + 38), "+" + money("ID", amt), font=fb, fill=(30, 130, 70), anchor="ra")
+            y += 130
+        images.append(img)
+    expected: dict[str, int] = {}
+    for i in sorted(visible):
+        day, _, amt = payments[i]
+        expected[day.isoformat()] = expected.get(day.isoformat(), 0) + amt
+    return images, expected
 
 
 # ---------------------------------------------------------------- the phone-photo look
@@ -506,12 +512,14 @@ def main() -> None:
         "expect": "Every row's Tea + Coffee + Snacks + Biscuit amounts are added up (quantities and rates ignored); "
                   "per-day totals match `rows`."})
 
-    shots = statement_screenshots(WARUNG, warung, [[0, 1, 2], [2, 3, 4], [4, 5, 6]])
+    shots, visible_days = statement_screenshots(warung)
     write_set("08-overlapping-screenshots", {
         "buku-kas-hal1.jpg": phone_photo(w_pages[0], 81), **{f"Screenshot_qris_{i + 1}.png": s for i, s in enumerate(shots)}}, {
-        "market": "ID", "statement_days": {warung[i].d.isoformat(): warung[i].digital for i in range(7)},
-        "expect": "Days 3 and 5 appear on two screenshots each and are counted once; per-day statement totals match "
-                  "`statement_days` (as far as the screenshots show whole days)."})
+        "market": "ID", "statement_days": visible_days,
+        "expect": "Each screenshot repeats the last 3 payments of the previous one, and days are split across shots. "
+                  "Repeated payments are counted once, so per-day statement totals match `statement_days` (what the "
+                  "screenshots show). They cover only the first days, so most notebook days have no statement to "
+                  "compare with."})
 
     write_set("09-mixed-batch-id", {
         **{f"buku-kas-hal{i + 1}.jpg": phone_photo(p, 90 + i) for i, p in enumerate(w_pages)},

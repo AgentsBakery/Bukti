@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date
 
 from agents import analysis
-from agents.extractor import _valid_date, merge_statement_days, statement_days
+from agents.extractor import _valid_date, statement_days
 from app.schemas import Entry, StatementDay
 
 
@@ -28,12 +28,20 @@ def test_old_cached_statement_format_still_reads():
     assert days[0].total == 200000 and days[0].transactions == 12
 
 
-def test_overlapping_screenshots_are_not_counted_twice():
-    a = [StatementDay(date="2026-10-01", transactions=3, total=90000, evidence_id="p1")]
-    b = [StatementDay(date="2026-10-01", transactions=3, total=90000, evidence_id="p2"),
-         StatementDay(date="2026-10-02", transactions=2, total=50000, evidence_id="p2")]
-    merged = merge_statement_days([a, b])
-    assert [(d.date, d.total) for d in merged] == [("2026-10-01", 90000), ("2026-10-02", 50000)]
+def test_overlapping_screenshots_count_each_payment_once():
+    from agents.extractor import merge_statement, statement_rows
+
+    def shot(ev, rows):
+        return statement_rows([{"date": d, "time": t, "amount": a, "transactions": 1, "incoming": True,
+                                "row_box": [1, 1, 2, 2]} for d, t, a in rows], ev)
+
+    # Scrolling: the second screenshot repeats the last two payments of the first.
+    s1 = shot("s1", [("2026-10-01", "08:10", 15000), ("2026-10-01", "09:00", 20000), ("2026-10-01", "09:00", 20000),
+                     ("2026-10-02", "07:30", 12000)])
+    s2 = shot("s2", [("2026-10-01", "09:00", 20000), ("2026-10-02", "07:30", 12000), ("2026-10-02", "11:45", 30000)])
+    days = {d.date: d.total for d in merge_statement([s1, s2])}
+    # Oct 1: 15,000 + two equal 20,000 payments at 09:00 on the same screenshot (both real); Oct 2: 12,000 + 30,000.
+    assert days == {"2026-10-01": 55000, "2026-10-02": 42000}
 
 
 def test_a_date_in_the_future_is_last_year():

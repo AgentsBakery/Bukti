@@ -242,6 +242,8 @@ async def read_ledger(app: Application, ev: Evidence, period: tuple[str, str]) -
         cache.write_text(json.dumps(raw, ensure_ascii=False), encoding="utf-8")
     notes = [n for n in raw.get("notes", []) if str(n).strip()]
     kind, reason = raw.get("page_kind", "daily_records"), str(raw.get("reason", ""))[:200]
+    if real and kind == "daily_records" and not any(sales_in(ln) or ln.get("amount_out") for ln in raw.get("lines", [])):
+        kind = "unreadable"  # a records page with nothing readable on it: ask for a better photo
     async with store.lock(app.id):
         a = await store.get(app.id)
         if notes:
@@ -271,9 +273,11 @@ async def read_ledger(app: Application, ev: Evidence, period: tuple[str, str]) -
     return entries
 
 
-async def read_statement(app: Application, ev: Evidence) -> list[StatementDay]:
+async def read_statement(app: Application, ev: Evidence) -> list[dict]:
+    """The money-in rows of one statement page or screenshot (see statement_rows)."""
     if devdata.ENABLED and app.pack_id:
-        return devdata.statement_days(app, ev)
+        return [{"date": d.date, "time": "", "amount": d.total, "count": d.transactions, "box": d.bbox or [0, 0, 0, 0],
+                 "evidence_id": ev.id} for d in devdata.statement_days(app, ev)]
     cache = _cache_path("statement", ev.sha256, PROMPT_VERSION if ev.src.startswith("pack:") else UPLOAD_PROMPT_VERSION)
     if cache.exists():
         raw = json.loads(cache.read_text(encoding="utf-8"))
@@ -287,7 +291,7 @@ async def read_statement(app: Application, ev: Evidence) -> list[StatementDay]:
         raw = [r.model_dump() for r in parsed.rows]
         cache.parent.mkdir(parents=True, exist_ok=True)
         cache.write_text(json.dumps(raw, ensure_ascii=False), encoding="utf-8")
-    return statement_days(raw, ev.id, None if ev.src.startswith("pack:") else date.today())
+    return statement_rows(raw, ev.id, None if ev.src.startswith("pack:") else date.today())
 
 
 def _union(a: list[int] | None, b: list[int]) -> list[int]:
@@ -296,10 +300,10 @@ def _union(a: list[int] | None, b: list[int]) -> list[int]:
     return [min(a[0], b[0]), min(a[1], b[1]), max(a[2], b[2]), max(a[3], b[3])]
 
 
-def statement_days(raw: list[dict], evidence_id: str, today: date | None = None) -> list[StatementDay]:
-    """One row per day: daily summary rows are kept, single payments are added up, money out is ignored.
+def statement_rows(raw: list[dict], evidence_id: str, today: date | None = None) -> list[dict]:
+    """Money received, one dict per row: single payments or daily summaries; money going out is dropped.
     Also reads the older cached format ({date, transactions, total})."""
-    days: dict[str, StatementDay] = {}
+    rows = []
     for r in raw:
         d = _valid_date(str(r.get("date", "")), "", today)
         if not d:
@@ -308,28 +312,41 @@ def statement_days(raw: list[dict], evidence_id: str, today: date | None = None)
             amount, count, incoming = int(r.get("total") or 0), int(r.get("transactions") or 0), True
         else:
             amount, count, incoming = int(r.get("amount") or 0), max(1, int(r.get("transactions") or 1)), bool(r.get("incoming", True))
-        if not incoming or amount <= 0:
-            continue
-        day = days.setdefault(d, StatementDay(date=d, transactions=0, total=0, evidence_id=evidence_id, bbox=None))
-        day.total += amount
-        day.transactions += count
-        day.bbox = _union(day.bbox, _clean_box(r.get("row_box")))
+        if incoming and amount > 0:
+            rows.append({"date": d, "time": str(r.get("time") or "").strip()[:5], "amount": amount, "count": count,
+                         "box": _clean_box(r.get("row_box")), "evidence_id": evidence_id})
+    return rows
+
+
+def merge_statement(files: list[list[dict]]) -> list[StatementDay]:
+    """Add the statement up per day from every uploaded file (all pages of one PDF count as one file).
+
+    Scrolling screenshots overlap: the same payment (date, time, amount) can appear on two files. Within one file
+    every row counts, so two equal payments at the same minute are both kept; across files the larger count of a
+    payment wins instead of the sum, so an overlap is counted once."""
+    best: dict[tuple, list[dict]] = {}
+    for rows in files:
+        by_key: dict[tuple, list[dict]] = {}
+        for r in rows:
+            by_key.setdefault((r["date"], r["time"], r["amount"]), []).append(r)
+        for key, same in by_key.items():
+            if len(same) > len(best.get(key, [])):
+                best[key] = same
+    days: dict[str, StatementDay] = {}
+    for same in best.values():
+        for r in same:
+            day = days.setdefault(r["date"], StatementDay(date=r["date"], transactions=0, total=0,
+                                                          evidence_id=r["evidence_id"], bbox=None))
+            day.total += r["amount"]
+            day.transactions += r["count"]
+            if r["evidence_id"] == day.evidence_id:
+                day.bbox = _union(day.bbox, r["box"])
     return sorted(days.values(), key=lambda s: s.date)
 
 
-def merge_statement_days(parts: list[list[StatementDay]]) -> list[StatementDay]:
-    """Combine days read from several statement pages; the same day appearing on two pages is added up,
-    unless both pages show exactly the same total (an overlapping screenshot), which is counted once."""
-    merged: dict[str, StatementDay] = {}
-    for part in parts:
-        for day in part:
-            seen = merged.get(day.date)
-            if seen is None:
-                merged[day.date] = day.model_copy()
-            elif seen.total != day.total:
-                seen.total += day.total
-                seen.transactions += day.transactions
-    return sorted(merged.values(), key=lambda s: s.date)
+def statement_days(raw: list[dict], evidence_id: str, today: date | None = None) -> list[StatementDay]:
+    """One statement file's rows, added up per day."""
+    return merge_statement([statement_rows(raw, evidence_id, today)])
 
 
 def sse(author: str, ctx: InvocationContext, payload: dict) -> Event:
@@ -382,13 +399,13 @@ class ExtractorAgent(BaseAgent):
                 live_app.entries = sorted(entries, key=lambda e: (e.date, e.amount_out > 0))
                 await store.save(live_app)
 
-        parts: list[list[StatementDay]] = []
-        for res in await stmt_future:
+        files: dict[str, list[dict]] = {}
+        for ev, res in zip(statements, await stmt_future, strict=True):
             if isinstance(res, Exception):
                 errors.append(str(res)[:200])
             else:
-                parts.append(res)
-        statement = merge_statement_days(parts)
+                files.setdefault(ev.parent_id or ev.id, []).extend(res)  # the pages of one PDF are one file
+        statement = merge_statement(list(files.values()))
         for day in statement:
             yield sse(self.name, ctx, {"type": "statement_day", "day": day.model_dump()})
 
