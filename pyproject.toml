@@ -17,7 +17,16 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["pytest>=8", "httpx>=0.28"]
+dev = [
+    "pytest>=8",
+    "httpx>=0.28",
+    "pytest-cov>=7.1.0",
+]
 
 [tool.uv]
 package = false
+
+[tool.coverage.run]
+# Relative paths so SonarQube (which scans from a different directory in CI) can match the report to the files.
+relative_files = true
+source = ["app", "agents"]

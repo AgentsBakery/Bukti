@@ -35,10 +35,10 @@ jobs:
       - run: uv sync --frozen
       - name: Lint
         run: uvx ruff check app agents eval tests data/generate_packs.py --select E,F,W,B,S,UP --ignore E501,S101,S311,B008,UP017
-      - name: Tests
+      - name: Tests (with coverage)
         env:
           BUKTI_WARM: "0"
-        run: uv run pytest -q
+        run: uv run pytest -q --cov --cov-report=term --cov-report=xml:coverage.xml
       - name: Bandit (Python SAST)
         run: uvx bandit -q -r app agents -ll
       - name: pip-audit (dependency CVEs)
@@ -115,6 +115,15 @@ jobs:
             sleep 10
           done
           echo "::error::SonarQube did not come up"; exit 1
+      # Coverage is measured here too (the backend job runs on another machine), so the scanner can read coverage.xml.
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - name: Measure backend coverage
+        env:
+          BUKTI_WARM: "0"
+        run: uv sync --frozen && uv run pytest -q --cov --cov-report=xml:coverage.xml
       - uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
